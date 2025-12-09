@@ -1,0 +1,95 @@
+take signature False
+
+define signature Not_Not
+  take signature P
+
+  define signature Not_P
+    take p of signature P
+    conjure false of signature False
+    give false
+
+  define signature Not_Not_P
+    take not_p of signature Not_P
+    conjure false of signature False
+    give false
+
+  take not_not_p of signature Not_Not_P
+  conjure p of signature P
+  give P
+
+take not_not of signature Not_Not
+
+define signature Not
+  take signature P
+  define signature Not_P
+    take p of signature P
+    conjure false of signature False
+    give false
+  give signature Not_P
+
+prove not of signature Not
+  take signature P
+  define signature Not_P
+    take p of signature P
+    conjure false of signature False
+    give false
+  give signature Not_P
+
+define signature Contraposition
+  take signature P
+  take signature Q
+
+  define signature P_Q
+    take p of signature P
+    conjure q of signature Q
+    give q
+
+  define signature Not_P
+    take p of signature P
+    conjure false of signature False
+    give false
+
+  define signature Not_Q
+    take q of signature Q
+    conjure false of signature False
+    give false
+
+  take p_q of signature P_Q
+  take not_q of signature Not_Q
+  conjure not_p of signature Not_P
+  give not_p
+
+prove contraposition of signature Contraposition
+  take signature P
+  take signature Q
+
+  define signature P_Q
+    take p of signature P
+    conjure q of signature Q
+    give q
+
+  define signature Not_P
+    take p of signature P
+    conjure false of signature False
+    give false
+
+  define signature Not_Q
+    take q of signature Q
+    conjure false of signature False
+    give false
+
+  take p_q of signature P_Q
+  take not_q of signature Not_Q
+
+  prove not_p of signature Not_P
+    take p of signature P
+
+    unwrap p_q' from p_q giving p
+    unwrap p_q'' from p_q' taking q
+
+    unwrap not_q' from not_q giving q
+    unwrap not_q'' from not_q' taking false
+
+    give false
+
+  give not_p

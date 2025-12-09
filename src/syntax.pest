@@ -1,0 +1,24 @@
+symbol                  = { (!(" " | "\t" | NEWLINE) ~ ANY)* }
+take_signature          = { "take signature " ~ symbol ~ inner_node? }
+conjure_signature       = { "conjure signature " ~ symbol ~ inner_node? }
+give_signature          = { "give signature " ~ symbol ~ inner_node? }
+define_signature        = { "define signature " ~ symbol ~ interior_node? ~ inner_node? }
+take                    = { "take " ~ symbol ~ " of signature " ~ symbol ~ inner_node? }
+conjure                 = { "conjure " ~ symbol ~ " of signature " ~ symbol ~ inner_node? }
+give                    = { "give " ~ symbol ~ inner_node? }
+prove                   = { "prove " ~ symbol ~ " of signature " ~ symbol ~ interior_node? ~ inner_node? }
+unwrap_giving           = { "unwrap " ~ symbol ~ " from " ~ symbol ~ " giving " ~ symbol ~ inner_node? }
+unwrap_giving_signature = { "unwrap " ~ symbol ~ " from " ~ symbol ~ " giving signature " ~ symbol ~ inner_node? }
+unwrap_taking           = { "unwrap " ~ symbol ~ " from " ~ symbol ~ " taking " ~ symbol ~ inner_node? }
+unwrap_taking_signature = { "unwrap " ~ symbol ~ " from " ~ symbol ~ " taking signature " ~ symbol ~ inner_node? }
+
+node          = _{ take_signature | conjure_signature | give_signature | define_signature | take | conjure | give | prove | unwrap_giving | unwrap_giving_signature | unwrap_taking | unwrap_taking_signature }
+prefix        = _{ NEWLINE ~ empty_line* ~ PEEK_ALL }
+inner_node    =  { prefix ~ node }
+interior_node =  { prefix ~ PUSH(indentation) ~ node ~ DROP }
+
+file       = _{ empty_line* ~ node ~ empty_line* ~ EOI }
+empty_line = _{ indentation? ~ comment? ~ NEWLINE }
+comment    = _{ "#" ~ (!NEWLINE ~ ANY)* }
+
+indentation = _{ (" " | "\t")+ }
