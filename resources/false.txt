@@ -34,7 +34,7 @@ define signature Not_Not
 
   take not_not_p of signature Not_Not_P
   conjure p of signature P
-  give P
+  give p
 
 take not_not of signature Not_Not
 
