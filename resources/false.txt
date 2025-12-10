@@ -1,3 +1,22 @@
+take signature Number
+
+define signature Negate
+  take n of signature Number
+  conjure negative_n of signature Number
+  give n
+
+take negate of signature Negate
+
+take 1 of signature Number
+take 2 of signature Number
+
+unwrap negate_1 from negate giving 1
+unwrap negate_1' from negate_1 taking -1
+
+unwrap negate_2 from negate giving 2
+unwrap negate_2' from negate_2 taking -2
+
+
 take signature False
 
 define signature Not_Not
