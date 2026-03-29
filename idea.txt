@@ -1,0 +1,160 @@
+(implies) = define
+  (p) = take
+  (q) = take
+  (p_q) = define
+    p = take (p)
+    q = conjure (q) using p
+    give q
+  give (p_q)
+
+implies = define (implies)
+  (p) = take
+  (q) = take
+  (p_q) = define
+    p = take (p)
+    q = conjure (q) using p
+    give p
+  give (p_q)
+
+(false) = define
+  (p) = take
+  p = conjure (p)
+  give p
+
+(not) = define
+  (p) = take
+  (not_p) = define
+    p = take (p)
+    false = conjure (false)
+    give false
+  give (not_p)
+
+not = define (not)
+  (p) = take
+  (not_p) = define
+    p = take (p)
+    false = conjure (false)
+    give false
+  give (not_p)
+
+(not_not) = define
+  (p) = take
+
+  produce_not_p = give (p) as (p) to not
+  (not_p) = take (not_p) from produce_not_p
+
+  # from n now on, syntax sugar:
+  # (not_p) = take (not_p) from { give (p) as (p) to not }
+  # or even:
+  # (not_p) = take from { give (p) to not }
+
+  (not_not_p) = take (not_p) from { give (not_p) as (p) to not }
+
+  not_not_p = take (not_not_p)
+  p = conjure (p) using not_not_p
+  give p
+
+# the only axiom in here
+not_not = take (not_not)
+
+# (p => q) => (!q => !p)
+# given:
+#   p => q
+# to prove:
+#   (q => false) => (p => false)
+# basically just transitivity of implication (p => q => false)
+(contraposition) = define
+  (p) = take
+  (q) = take
+
+  (p_q) = take (p_q) from { give (q) to { give (p) to implies } }
+  # from now on, syntax sugar:
+  # (p_q) = take from { give (p) (q) to implies }
+
+  (not_p) = take from { give (p) to not }
+  (not_q) = take (not_p) from { give (q) as (p) to not }
+  (not_q_not_p) = take (p_q) from { give (not_q) as p and (not_p) as q to implies }
+
+  p_q = take (p_q)
+  not_q_not_p = conjure (not_q_not_p) using p_q
+  give not_q_not_p
+
+contraposition = define (contraposition)
+  (p) = take
+  (q) = take
+
+  (p_q) = take from { give (p) (q) to implies }
+  (not_p) = take from { give (p) to not }
+  (not_q) = take (not_p) from { give (q) as (p) to not }
+  (not_q_not_p) = take (p_q) from { give (not_q) as p and (not_p) as q to implies }
+
+  p_q = take (p_q)
+
+  not_q_not_p = define (not_q_not_p)
+    not_q = take (not_q)
+    not_p = define (not_p)
+      p = take (p)
+      q = take from { give (p) to p_q }
+      false = take from { give (q) to not_q }
+      give false
+    give not_p
+
+  give not_q_not_p
+
+# (!q => !p) => (p => q)
+# given:
+#   (q => false) => (p => false)
+# to prove:
+#   p => q
+(contraposition_reverse) = define
+  (p) = take
+  (q) = take
+
+  (p_q) = take from { give (p) (q) to implies }
+  (not_p) = take from { give (p) to not }
+  (not_q) = take (not_p) from { give (q) as (p) to not }
+  (not_q_not_p) = take (p_q) from { give (not_q) as (p) and (not_p) as (q) to implies }
+
+  not_q_not_p = take (not_q_not_p)
+  p_q = conjure (p_q) using not_q_not_p
+  give p_q
+
+contraposition_reverse = define (contraposition_reverse)
+  (p) = take
+  (q) = take
+
+  (p_q) = take from { give (p) (q) to implies }
+  (not_p) = take from { give (p) to not }
+  (not_q) = take (not_p) from { give (q) as (p) to not }
+  (not_q_not_p) = take (p_q) from { give (not_q) as (p) and (not_p) as (q) to implies }
+
+  (not_not_p) = take (not_p) from { give (not_p) as (p) to not }
+  (not_not_q) = take (not_p) from { give (not_q) as (p) to not }
+  (not_not_p_not_not_q) = take (p_q) from { give (not_not_p) as (p) and (not_not_q) as (q) to implies }
+
+  not_q_not_p = take (not_q_not_p)
+
+  p_q = define (p_q)
+    p = take (p)
+
+    not_q_not_p = define (not_q_not_p)
+      not_q = take (not_q)
+      not_p = take q from { give not_q as p to not_q_not_p }
+      give not_p
+
+    not_not_p = define (not_not_p)
+      not_p = take (not_p)
+      false = take from { give not_p as p to not_p }
+      give false
+
+    not_not_p_not_not_q = take not_q_not_p from {
+      give (not_q) as (p) and (not_p) as (q) and not_q_not_p as p_q to contraposition
+    }
+
+    not_not_q = take q from { give not_not_p as p to not_not_p_not_not_q }
+
+    q = take p from { give (q) as (p) and not_not_q as not_not_p to not_not }
+
+    give q
+
+  give p_q

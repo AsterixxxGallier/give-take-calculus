@@ -1,0 +1,38 @@
+take this_thing
+take other_thing
+
+define give_this_thing
+  give this_thing
+
+define give_other_thing
+  give other_thing
+
+define give_both_things
+  give this_thing
+  give other_thing
+
+prove give_both_things satisfies give_this_thing
+  from give_both_things take this_thing
+  from give_both_things take other_thing
+  to give_this_thing give this_thing
+
+prove give_both_things satisfies give_other_thing
+  from give_both_things take this_thing
+  from give_both_things take other_thing
+  to give_other_thing give other_thing
+
+define give_any_thing
+  from ? take thing
+  give thing
+
+prove give_this_thing satisfies give_any_thing
+  from give_this_thing take this_thing
+  to give_any_thing give this_thing
+
+define give_any_thing_twice
+  from ? take thing
+  give thing
+  give thing
+
+subtype give_this_thing_twice of give_any_thing_twice
+  to give_any_thing_twice

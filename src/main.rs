@@ -100,8 +100,8 @@ enum NodeInfo {
     },
     DefineSignature {
         signature: SignatureIndex,
-        inner_node: NodeIndex,
         interior_node: NodeIndex,
+        inner_node: NodeIndex,
     },
     Take {
         function: FunctionIndex,
@@ -120,8 +120,8 @@ enum NodeInfo {
     Prove {
         function: FunctionIndex,
         signature: SignatureIndex,
-        inner_node: NodeIndex,
         interior_node: NodeIndex,
+        inner_node: NodeIndex,
     },
     UnwrapGiving {
         inner_function: FunctionIndex,
@@ -156,675 +156,310 @@ struct File {
     signatures: Vec<Signature>,
 }
 
-#[derive(Parser)]
-#[grammar = "syntax.pest"]
-struct MyParser;
+mod parse;
 
 impl File {
-    fn parse(path: &str) -> Self {
-        let text = fs::read_to_string(path).unwrap();
-        let mut this = Self {
-            nodes: vec![],
-            functions: vec![],
-            signatures: vec![],
-        };
-        #[derive(Copy, Clone)]
-        enum Stage {
-            First,
-            Second,
-            End,
-        }
-        #[derive(Clone)]
-        struct StackFrame<'i> {
-            context: Context,
-            node_pair: Pair<'i, Rule>,
-            reserved_node: NodeIndex,
-            function_resolve_map: HashMap<String, FunctionIndex>,
-            signature_resolve_map: HashMap<String, SignatureIndex>,
-        }
-        fn define_function(
-            this: &mut File,
-            origin_node: NodeIndex,
-            origin: FunctionOrigin,
-            pair: Pair<Rule>,
-        ) -> FunctionIndex {
-            let text = pair.as_str().to_owned();
-            let function = this.functions.len();
-            this.functions.push(Function {
-                text: text.clone(),
-                origin_node,
-                origin,
-            });
-            function
-        }
-        fn define_signature(
-            this: &mut File,
-            origin_node: NodeIndex,
-            origin: SignatureOrigin,
-            pair: Pair<Rule>,
-        ) -> SignatureIndex {
-            let text = pair.as_str().to_owned();
-            let signature = this.signatures.len();
-            this.signatures.push(Signature {
-                text: text.clone(),
-                origin_node,
-                origin,
-            });
-            signature
-        }
-        fn resolve_function(
-            this: &mut File,
-            stack_frame: &StackFrame,
-            pair: Pair<Rule>,
-        ) -> FunctionIndex {
-            let text = pair.as_str().to_owned();
-            if let Some(&function) = stack_frame.function_resolve_map.get(&text) {
-                function
-            } else {
-                panic!("function {text} not found in scope");
-            }
-        }
-        fn resolve_signature(
-            this: &mut File,
-            stack_frame: &StackFrame,
-            pair: Pair<Rule>,
-        ) -> SignatureIndex {
-            let text = pair.as_str().to_owned();
-            if let Some(&signature) = stack_frame.signature_resolve_map.get(&text) {
-                signature
-            } else {
-                panic!("signature {text} not found in scope");
-            }
-        }
-        fn find_inner_node(mut pairs: Pairs<Rule>) -> Option<Pair<Rule>> {
-            pairs
-                .find(|pair| pair.as_rule() == Rule::inner_node)
-                .map(|pair| pair.into_inner().next().unwrap())
-        }
-        fn find_interior_node(mut pairs: Pairs<Rule>) -> Option<Pair<Rule>> {
-            pairs
-                .find(|pair| pair.as_rule() == Rule::interior_node)
-                .map(|pair| pair.into_inner().next().unwrap())
-        }
-        fn create_stack_frame<'i>(
-            this: &File,
-            node_pair: Pair<'i, Rule>,
-            reserved_node: NodeIndex,
-            parent: &StackFrame<'i>,
-            parent_node: NodeIndex,
-            relation_to_parent_node: RelationToParentNode,
-            new_functions: Vec<FunctionIndex>,
-            new_signatures: Vec<SignatureIndex>,
-        ) -> StackFrame<'i> {
-            let available_functions = parent
-                .context
-                .available_functions
-                .iter()
-                .chain(new_functions.iter())
-                .copied()
-                .collect();
-            let function_resolve_map = parent
-                .function_resolve_map
-                .clone()
-                .into_iter()
-                .chain(
-                    new_functions
-                        .into_iter()
-                        .map(|function| (this.functions[function].text.clone(), function)),
-                )
-                .collect();
-            let available_signatures = parent
-                .context
-                .available_signatures
-                .iter()
-                .chain(new_signatures.iter())
-                .copied()
-                .collect();
-            let signature_resolve_map = parent
-                .signature_resolve_map
-                .clone()
-                .into_iter()
-                .chain(
-                    new_signatures
-                        .into_iter()
-                        .map(|signature| (this.signatures[signature].text.clone(), signature)),
-                )
-                .collect();
-            StackFrame {
-                context: Context {
-                    parent_info: Some(ParentInfo {
-                        parent_node,
-                        relation_to_parent_node,
-                    }),
-                    available_functions,
-                    available_signatures,
-                },
-                node_pair,
-                reserved_node,
-                function_resolve_map,
-                signature_resolve_map,
-            }
-        }
-        fn reserve_node(this: &mut File) -> NodeIndex {
-            let node = this.nodes.len();
-            this.nodes.push(None);
-            node
-        }
-        fn recurse(this: &mut File, stack_frame: StackFrame) {
-            match stack_frame.node_pair.as_rule() {
-                Rule::take_signature => {
-                    let mut pairs = stack_frame.node_pair.clone().into_inner();
-                    let signature_pair = pairs.next().unwrap();
-
-                    let node = stack_frame.reserved_node;
-                    let inner_node = reserve_node(this);
-
-                    let signature =
-                        define_signature(this, node, SignatureOrigin::TakeSignature, signature_pair);
-
-                    this.nodes[node] = Some(Node {
-                        context: stack_frame.context.clone(),
-                        info: NodeInfo::TakeSignature { signature, inner_node },
-                    });
-
-                    if let Some(inner_node_pair) = find_inner_node(pairs.clone()) {
-                        let inner_stack_frame = create_stack_frame(
-                            this,
-                            inner_node_pair,
-                            inner_node,
-                            &stack_frame,
-                            node,
-                            RelationToParentNode::TakeSignature_Inner,
-                            vec![],
-                            vec![signature],
-                        );
-                        recurse(this, inner_stack_frame);
-                    }
-                }
-                Rule::conjure_signature => {
-                    let mut pairs = stack_frame.node_pair.clone().into_inner();
-                    let signature_pair = pairs.next().unwrap();
-
-                    let node = stack_frame.reserved_node;
-                    let inner_node = reserve_node(this);
-
-                    let signature =
-                        define_signature(this, node, SignatureOrigin::ConjureSignature, signature_pair);
-
-                    this.nodes[node] = Some(Node {
-                        context: stack_frame.context.clone(),
-                        info: NodeInfo::ConjureSignature { signature, inner_node },
-                    });
-
-                    if let Some(inner_node_pair) = find_inner_node(pairs.clone()) {
-                        let inner_stack_frame = create_stack_frame(
-                            this,
-                            inner_node_pair,
-                            inner_node,
-                            &stack_frame,
-                            node,
-                            RelationToParentNode::ConjureSignature_Inner,
-                            vec![],
-                            vec![signature],
-                        );
-                        recurse(this, inner_stack_frame);
-                    }
-                }
-                Rule::give_signature => {
-                    let mut pairs = stack_frame.node_pair.clone().into_inner();
-                    let signature_pair = pairs.next().unwrap();
-
-                    let node = stack_frame.reserved_node;
-                    let inner_node = reserve_node(this);
-
-                    let signature = resolve_signature(this, &stack_frame, signature_pair);
-
-                    this.nodes[node] = Some(Node {
-                        context: stack_frame.context.clone(),
-                        info: NodeInfo::GiveSignature { signature, inner_node },
-                    });
-
-                    if let Some(inner_node_pair) = find_inner_node(pairs.clone()) {
-                        let inner_stack_frame = create_stack_frame(
-                            this,
-                            inner_node_pair,
-                            inner_node,
-                            &stack_frame,
-                            node,
-                            RelationToParentNode::GiveSignature_Inner,
-                            vec![],
-                            vec![signature],
-                        );
-                        recurse(this, inner_stack_frame);
-                    }
-                }
-                Rule::define_signature => {
-                    let mut pairs = stack_frame.node_pair.clone().into_inner();
-                    let signature_pair = pairs.next().unwrap();
-
-                    let node = stack_frame.reserved_node;
-                    let interior_node = reserve_node(this);
-                    let inner_node = reserve_node(this);
-
-                    let signature =
-                        define_signature(this, node, SignatureOrigin::DefineSignature, signature_pair);
-
-                    this.nodes[node] = Some(Node {
-                        context: stack_frame.context.clone(),
-                        info: NodeInfo::DefineSignature {
-                            signature,
-                            interior_node,
-                            inner_node,
-                        },
-                    });
-
-                    if let Some(interior_node_pair) = find_interior_node(pairs.clone()) {
-                        let interior_stack_frame = create_stack_frame(
-                            this,
-                            interior_node_pair,
-                            interior_node,
-                            &stack_frame,
-                            node,
-                            RelationToParentNode::DefineSignature_Interior,
-                            vec![],
-                            vec![],
-                        );
-                        recurse(this, interior_stack_frame);
-                    }
-
-                    if let Some(inner_node_pair) = find_inner_node(pairs.clone()) {
-                        let inner_stack_frame = create_stack_frame(
-                            this,
-                            inner_node_pair,
-                            inner_node,
-                            &stack_frame,
-                            node,
-                            RelationToParentNode::DefineSignature_Inner,
-                            vec![],
-                            vec![signature],
-                        );
-                        recurse(this, inner_stack_frame);
-                    }
-                }
-                Rule::take => {
-                    let mut pairs = stack_frame.node_pair.clone().into_inner();
-                    let function_pair = pairs.next().unwrap();
-                    let signature_pair = pairs.next().unwrap();
-
-                    let node = stack_frame.reserved_node;
-                    let inner_node = reserve_node(this);
-
-                    let function = define_function(this, node, FunctionOrigin::Take, function_pair);
-                    let signature = resolve_signature(this, &stack_frame, signature_pair);
-
-                    this.nodes[node] = Some(Node {
-                        context: stack_frame.context.clone(),
-                        info: NodeInfo::Take {
-                            function,
-                            signature,
-                            inner_node,
-                        },
-                    });
-
-                    if let Some(inner_node_pair) = find_inner_node(pairs.clone()) {
-                        let inner_stack_frame = create_stack_frame(
-                            this,
-                            inner_node_pair,
-                            inner_node,
-                            &stack_frame,
-                            node,
-                            RelationToParentNode::Take_Inner,
-                            vec![function],
-                            vec![],
-                        );
-                        recurse(this, inner_stack_frame);
-                    }
-                }
-                Rule::conjure => {
-                    let mut pairs = stack_frame.node_pair.clone().into_inner();
-                    let function_pair = pairs.next().unwrap();
-                    let signature_pair = pairs.next().unwrap();
-
-                    let node = stack_frame.reserved_node;
-                    let inner_node = reserve_node(this);
-
-                    let function = define_function(this, node, FunctionOrigin::Conjure, function_pair);
-                    let signature = resolve_signature(this, &stack_frame, signature_pair);
-
-                    this.nodes[node] = Some(Node {
-                        context: stack_frame.context.clone(),
-                        info: NodeInfo::Conjure {
-                            function,
-                            signature,
-                            inner_node,
-                        },
-                    });
-
-                    if let Some(inner_node_pair) = find_inner_node(pairs.clone()) {
-                        let inner_stack_frame = create_stack_frame(
-                            this,
-                            inner_node_pair,
-                            inner_node,
-                            &stack_frame,
-                            node,
-                            RelationToParentNode::Conjure_Inner,
-                            vec![function],
-                            vec![],
-                        );
-                        recurse(this, inner_stack_frame);
-                    }
-                }
-                Rule::give => {
-                    let mut pairs = stack_frame.node_pair.clone().into_inner();
-                    let function_pair = pairs.next().unwrap();
-
-                    let node = stack_frame.reserved_node;
-                    let inner_node = reserve_node(this);
-
-                    let function = resolve_function(this, &stack_frame, function_pair);
-
-                    this.nodes[node] = Some(Node {
-                        context: stack_frame.context.clone(),
-                        info: NodeInfo::Give { function, inner_node },
-                    });
-
-                    if let Some(inner_node_pair) = find_inner_node(pairs.clone()) {
-                        let inner_stack_frame = create_stack_frame(
-                            this,
-                            inner_node_pair,
-                            inner_node,
-                            &stack_frame,
-                            node,
-                            RelationToParentNode::Give_Inner,
-                            vec![],
-                            vec![],
-                        );
-                        recurse(this, inner_stack_frame);
-                    }
-                }
-                Rule::prove => {
-                    let mut pairs = stack_frame.node_pair.clone().into_inner();
-                    let function_pair = pairs.next().unwrap();
-                    let signature_pair = pairs.next().unwrap();
-
-                    let node = stack_frame.reserved_node;
-                    let interior_node = reserve_node(this);
-                    let inner_node = reserve_node(this);
-
-                    let function = define_function(this, node, FunctionOrigin::Prove, function_pair);
-                    let signature = resolve_signature(this, &stack_frame, signature_pair);
-
-                    this.nodes[node] = Some(Node {
-                        context: stack_frame.context.clone(),
-                        info: NodeInfo::Prove {
-                            function,
-                            signature,
-                            interior_node,
-                            inner_node,
-                        },
-                    });
-
-                    if let Some(interior_node_pair) = find_interior_node(pairs.clone()) {
-                        let interior_stack_frame = create_stack_frame(
-                            this,
-                            interior_node_pair,
-                            interior_node,
-                            &stack_frame,
-                            node,
-                            RelationToParentNode::Prove_Interior,
-                            vec![],
-                            vec![],
-                        );
-                        recurse(this, interior_stack_frame);
-                    }
-
-                    if let Some(inner_node_pair) = find_inner_node(pairs.clone()) {
-                        let inner_stack_frame = create_stack_frame(
-                            this,
-                            inner_node_pair,
-                            inner_node,
-                            &stack_frame,
-                            node,
-                            RelationToParentNode::Prove_Inner,
-                            vec![function],
-                            vec![],
-                        );
-                        recurse(this, inner_stack_frame);
-                    }
-                }
-                Rule::unwrap_giving => {
-                    let mut pairs = stack_frame.node_pair.clone().into_inner();
-                    let inner_function_pair = pairs.next().unwrap();
-                    let outer_function_pair = pairs.next().unwrap();
-                    let given_function_pair = pairs.next().unwrap();
-
-                    let node = stack_frame.reserved_node;
-                    let inner_node = reserve_node(this);
-
-                    let inner_function = define_function(
-                        this,
-                        node,
-                        FunctionOrigin::UnwrapGiving_InnerFunction,
-                        inner_function_pair,
-                    );
-                    let outer_function = resolve_function(this, &stack_frame, outer_function_pair);
-                    let given_function = resolve_function(this, &stack_frame, given_function_pair);
-
-                    this.nodes[node] = Some(Node {
-                        context: stack_frame.context.clone(),
-                        info: NodeInfo::UnwrapGiving {
-                            inner_function,
-                            outer_function,
-                            given_function,
-                            inner_node,
-                        },
-                    });
-
-                    if let Some(inner_node_pair) = find_inner_node(pairs.clone()) {
-                        let inner_stack_frame = create_stack_frame(
-                            this,
-                            inner_node_pair,
-                            inner_node,
-                            &stack_frame,
-                            node,
-                            RelationToParentNode::UnwrapGiving_Inner,
-                            vec![inner_function],
-                            vec![],
-                        );
-                        recurse(this, inner_stack_frame);
-                    }
-                }
-                Rule::unwrap_giving_signature => {
-                    let mut pairs = stack_frame.node_pair.clone().into_inner();
-                    let inner_function_pair = pairs.next().unwrap();
-                    let outer_function_pair = pairs.next().unwrap();
-                    let given_signature_pair = pairs.next().unwrap();
-
-                    let node = stack_frame.reserved_node;
-                    let inner_node = reserve_node(this);
-
-                    let inner_function = define_function(
-                        this,
-                        node,
-                        FunctionOrigin::UnwrapGivingSignature_InnerFunction,
-                        inner_function_pair,
-                    );
-                    let outer_function = resolve_function(this, &stack_frame, outer_function_pair);
-                    let given_signature = resolve_signature(this, &stack_frame, given_signature_pair);
-
-                    this.nodes[node] = Some(Node {
-                        context: stack_frame.context.clone(),
-                        info: NodeInfo::UnwrapGivingSignature {
-                            inner_function,
-                            outer_function,
-                            given_signature,
-                            inner_node,
-                        },
-                    });
-
-                    if let Some(inner_node_pair) = find_inner_node(pairs.clone()) {
-                        let inner_stack_frame = create_stack_frame(
-                            this,
-                            inner_node_pair,
-                            inner_node,
-                            &stack_frame,
-                            node,
-                            RelationToParentNode::UnwrapGivingSignature_Inner,
-                            vec![inner_function],
-                            vec![],
-                        );
-                        recurse(this, inner_stack_frame);
-                    }
-                }
-                Rule::unwrap_taking => {
-                    let mut pairs = stack_frame.node_pair.clone().into_inner();
-                    let inner_function_pair = pairs.next().unwrap();
-                    let outer_function_pair = pairs.next().unwrap();
-                    let taken_function_pair = pairs.next().unwrap();
-
-                    let node = stack_frame.reserved_node;
-                    let inner_node = reserve_node(this);
-
-                    let inner_function = define_function(
-                        this,
-                        node,
-                        FunctionOrigin::UnwrapTaking_InnerFunction,
-                        inner_function_pair,
-                    );
-                    let outer_function = resolve_function(this, &stack_frame, outer_function_pair);
-                    let taken_function = define_function(
-                        this,
-                        node,
-                        FunctionOrigin::UnwrapTaking_TakenFunction,
-                        taken_function_pair,
-                    );
-
-                    this.nodes[node] = Some(Node {
-                        context: stack_frame.context.clone(),
-                        info: NodeInfo::UnwrapTaking {
-                            inner_function,
-                            outer_function,
-                            taken_function,
-                            inner_node,
-                        },
-                    });
-
-                    if let Some(inner_node_pair) = find_inner_node(pairs.clone()) {
-                        let inner_stack_frame = create_stack_frame(
-                            this,
-                            inner_node_pair,
-                            inner_node,
-                            &stack_frame,
-                            node,
-                            RelationToParentNode::UnwrapTaking_Inner,
-                            vec![inner_function, taken_function],
-                            vec![],
-                        );
-                        recurse(this, inner_stack_frame);
-                    }
-                }
-                Rule::unwrap_taking_signature => {
-                    let mut pairs = stack_frame.node_pair.clone().into_inner();
-                    let inner_function_pair = pairs.next().unwrap();
-                    let outer_function_pair = pairs.next().unwrap();
-                    let taken_signature_pair = pairs.next().unwrap();
-
-                    let node = stack_frame.reserved_node;
-                    let inner_node = reserve_node(this);
-
-                    let inner_function = define_function(
-                        this,
-                        node,
-                        FunctionOrigin::UnwrapTakingSignature_InnerFunction,
-                        inner_function_pair,
-                    );
-                    let outer_function = resolve_function(this, &stack_frame, outer_function_pair);
-                    let taken_signature = define_signature(
-                        this,
-                        node,
-                        SignatureOrigin::UnwrapTakingSignature_TakenSignature,
-                        taken_signature_pair,
-                    );
-
-                    this.nodes[node] = Some(Node {
-                        context: stack_frame.context.clone(),
-                        info: NodeInfo::UnwrapTakingSignature {
-                            inner_function,
-                            outer_function,
-                            taken_signature,
-                            inner_node,
-                        },
-                    });
-
-                    if let Some(inner_node_pair) = find_inner_node(pairs.clone()) {
-                        let inner_stack_frame = create_stack_frame(
-                            this,
-                            inner_node_pair,
-                            inner_node,
-                            &stack_frame,
-                            node,
-                            RelationToParentNode::UnwrapTakingSignature_Inner,
-                            vec![inner_function],
-                            vec![taken_signature],
-                        );
-                        recurse(this, inner_stack_frame);
-                    }
-                }
-                _ => unreachable!(),
-            }
-        }
-        let root = MyParser::parse(Rule::file, &text).unwrap().next().unwrap();
-        let root_node = reserve_node(&mut this);
-        recurse(
-            &mut this,
-            StackFrame {
-                context: Context {
-                    parent_info: None,
-                    available_functions: vec![],
-                    available_signatures: vec![],
-                },
-                node_pair: root,
-                reserved_node: root_node,
-                function_resolve_map: HashMap::new(),
-                signature_resolve_map: HashMap::new(),
-            },
-        );
-
-        this
-    }
-
     fn check(&self) {
-        /*enum Value {
-            TakeSignature(SymbolIndex),
+        #[allow(non_camel_case_types)]
+        #[derive(Debug, Clone)]
+        enum FunctionValue {
+            Take(FunctionIndex),
+            Conjure(FunctionIndex),
+            Prove(FunctionIndex),
+            UnwrapGiving_InnerFunction {
+                outer_function: Box<FunctionValue>,
+                given_function: Box<FunctionValue>,
+            },
+            UnwrapGivingSignature_InnerFunction {
+                outer_function: Box<FunctionValue>,
+                given_signature: Box<SignatureValue>,
+            },
+            UnwrapTaking_InnerFunction {
+                outer_function: Box<FunctionValue>,
+            },
+            UnwrapTaking_TakenFunction {
+                outer_function: Box<FunctionValue>,
+            },
+            UnwrapTakingSignature_InnerFunction {
+                outer_function: Box<FunctionValue>,
+            },
         }
 
-        fn recurse(this: &File, symbol_values: &mut HashMap<SymbolIndex, Value>, node: &Node) {
-            match *node {
-                Node::TakeSignature {
-                    symbol,
-                    outer_scope,
-                    inner_scope,
+        #[allow(non_camel_case_types)]
+        #[derive(Debug, Clone)]
+        enum SignatureValue {
+            TakeSignature(SignatureIndex),
+            ConjureSignature(SignatureIndex),
+            DefineSignature(SignatureIndex),
+            UnwrapTakingSignature_TakenSignature { outer_function: Box<FunctionValue> },
+        }
+
+        struct State<'a> {
+            file: &'a File,
+            function_values: HashMap<FunctionIndex, FunctionValue>,
+            signature_values: HashMap<SignatureIndex, SignatureValue>,
+        }
+
+        #[derive(Debug)]
+        struct ProofState {
+            node: NodeIndex,
+            function_values: HashMap<FunctionIndex, FunctionValue>,
+            signature_values: HashMap<SignatureIndex, SignatureValue>,
+        };
+
+        #[derive(Debug)]
+        enum Environment {
+            Global,
+            Prove(ProofState),
+            DefineSignature,
+        }
+
+        fn recurse(state: &mut State, node: NodeIndex, mut environment: Environment) {
+            match state.file.nodes[node].as_ref().unwrap().info {
+                NodeInfo::TakeSignature {
+                    signature,
+                    inner_node,
                 } => {
-                    symbol_values.insert(symbol, Value::TakeSignature(symbol));
+                    let signature_value = SignatureValue::TakeSignature(signature);
+                    if let Environment::Prove(proof_state) = &mut environment {
+                        let node = proof_state.node;
+                        if let NodeInfo::TakeSignature {
+                            signature,
+                            inner_node,
+                        } = state.file.nodes[node].as_ref().unwrap().info
+                        {
+                            proof_state.node = inner_node;
+                            proof_state
+                                .signature_values
+                                .insert(signature, signature_value.clone());
+                        } else {
+                            panic!(
+                                "proof does not match signature definition: expected take signature in signature definition"
+                            );
+                        }
+                        loop {
+                            let node = proof_state.node;
+                            match state.file.nodes[node].as_ref().unwrap().info {
+                                NodeInfo::TakeSignature { .. } => break,
+                                NodeInfo::ConjureSignature { signature, inner_node } => {
+                                    proof_state.node = inner_node;
+                                    continue;
+                                }
+                                NodeInfo::GiveSignature { .. } => break,
+                                NodeInfo::DefineSignature { signature, interior_node, inner_node } => {
+                                    proof_state.node = inner_node;
+                                    continue;
+                                }
+                                NodeInfo::Take { .. } => {}
+                                NodeInfo::Conjure { .. } => {}
+                                NodeInfo::Give { .. } => {}
+                                NodeInfo::Prove { .. } => {}
+                                NodeInfo::UnwrapGiving { .. } => {}
+                                NodeInfo::UnwrapGivingSignature { .. } => {}
+                                NodeInfo::UnwrapTaking { .. } => {}
+                                NodeInfo::UnwrapTakingSignature { .. } => {}
+                            }
+                        }
+                    }
+                    state.signature_values.insert(signature, signature_value);
+                    recurse(state, inner_node, environment);
+                    state.signature_values.remove(&signature);
                 }
-                Node::ConjureSignature { .. } => {}
-                Node::GiveSignature { .. } => {}
-                Node::DefineSignature { .. } => {}
-                Node::Take { .. } => {}
-                Node::Conjure { .. } => {}
-                Node::Give { .. } => {}
-                Node::Prove { .. } => {}
-                Node::UnwrapGiving { .. } => {}
-                Node::UnwrapGivingSignature { .. } => {}
-                Node::UnwrapTaking { .. } => {}
-                Node::UnwrapTakingSignature { .. } => {}
+                NodeInfo::ConjureSignature {
+                    signature,
+                    inner_node,
+                } => {
+                    assert!(
+                        matches!(environment, Environment::DefineSignature),
+                        "cannot conjure outside of define signature environment"
+                    );
+                    state
+                        .signature_values
+                        .insert(signature, SignatureValue::ConjureSignature(signature));
+                    recurse(state, inner_node, environment);
+                    state.signature_values.remove(&signature);
+                }
+                NodeInfo::GiveSignature {
+                    signature,
+                    inner_node,
+                } => {
+                    recurse(state, inner_node, environment);
+                }
+                NodeInfo::DefineSignature {
+                    signature,
+                    interior_node,
+                    inner_node,
+                } => {
+                    recurse(state, interior_node, Environment::DefineSignature);
+                    state
+                        .signature_values
+                        .insert(signature, SignatureValue::DefineSignature(signature));
+                    recurse(state, inner_node, environment);
+                    state.signature_values.remove(&signature);
+                }
+                NodeInfo::Take {
+                    function,
+                    signature,
+                    inner_node,
+                } => {
+                    state
+                        .function_values
+                        .insert(function, FunctionValue::Take(function));
+                    recurse(state, inner_node, environment);
+                    state.function_values.remove(&function);
+                }
+                NodeInfo::Conjure {
+                    function,
+                    signature,
+                    inner_node,
+                } => {
+                    assert_eq!(
+                        environment,
+                        Environment::DefineSignature,
+                        "cannot conjure outside of define signature environment"
+                    );
+                    state
+                        .function_values
+                        .insert(function, FunctionValue::Take(function));
+                    recurse(state, inner_node, environment);
+                    state.function_values.remove(&function);
+                }
+                NodeInfo::Give {
+                    function,
+                    inner_node,
+                } => {
+                    recurse(state, inner_node, environment);
+                }
+                NodeInfo::Prove {
+                    function,
+                    signature,
+                    interior_node,
+                    inner_node,
+                } => {
+                    let signature_origin_inner_node = {
+                        let node = state.file.signatures[signature].origin_node;
+                        let NodeInfo::DefineSignature {
+                            signature,
+                            interior_node,
+                            inner_node,
+                        } = state.file.nodes[node].as_ref().unwrap().info
+                        else {
+                            unreachable!()
+                        };
+                        interior_node
+                    };
+                    recurse(
+                        state,
+                        interior_node,
+                        Environment::Prove(ProofState(signature_origin_inner_node)),
+                    );
+                    state
+                        .function_values
+                        .insert(function, FunctionValue::Prove(function));
+                    recurse(state, inner_node, environment);
+                    state.function_values.remove(&function);
+                }
+                NodeInfo::UnwrapGiving {
+                    inner_function,
+                    outer_function,
+                    given_function,
+                    inner_node,
+                } => {
+                    let outer_function_value =
+                        state.function_values.get(&outer_function).unwrap().clone();
+                    let given_function_value =
+                        state.function_values.get(&given_function).unwrap().clone();
+                    state.function_values.insert(
+                        inner_function,
+                        FunctionValue::UnwrapGiving_InnerFunction {
+                            outer_function: Box::new(outer_function_value),
+                            given_function: Box::new(given_function_value),
+                        },
+                    );
+                    recurse(state, inner_node, environment);
+                    state.function_values.remove(&inner_function);
+                }
+                NodeInfo::UnwrapGivingSignature {
+                    inner_function,
+                    outer_function,
+                    given_signature,
+                    inner_node,
+                } => {
+                    let outer_function_value =
+                        state.function_values.get(&outer_function).unwrap().clone();
+                    let given_signature_value = state
+                        .signature_values
+                        .get(&given_signature)
+                        .unwrap()
+                        .clone();
+                    state.function_values.insert(
+                        inner_function,
+                        FunctionValue::UnwrapGivingSignature_InnerFunction {
+                            outer_function: Box::new(outer_function_value),
+                            given_signature: Box::new(given_signature_value),
+                        },
+                    );
+                    recurse(state, inner_node, environment);
+                    state.function_values.remove(&inner_function);
+                }
+                NodeInfo::UnwrapTaking {
+                    inner_function,
+                    outer_function,
+                    taken_function,
+                    inner_node,
+                } => {
+                    let outer_function_value =
+                        state.function_values.get(&outer_function).unwrap().clone();
+                    state.function_values.insert(
+                        inner_function,
+                        FunctionValue::UnwrapTaking_InnerFunction {
+                            outer_function: Box::new(outer_function_value.clone()),
+                        },
+                    );
+                    state.function_values.insert(
+                        taken_function,
+                        FunctionValue::UnwrapTaking_TakenFunction {
+                            outer_function: Box::new(outer_function_value),
+                        },
+                    );
+                    recurse(state, inner_node, environment);
+                    state.function_values.remove(&inner_function);
+                    state.function_values.remove(&taken_function);
+                }
+                NodeInfo::UnwrapTakingSignature {
+                    inner_function,
+                    outer_function,
+                    taken_signature,
+                    inner_node,
+                } => {
+                    let outer_function_value =
+                        state.function_values.get(&outer_function).unwrap().clone();
+                    state.function_values.insert(
+                        inner_function,
+                        FunctionValue::UnwrapTakingSignature_InnerFunction {
+                            outer_function: Box::new(outer_function_value.clone()),
+                        },
+                    );
+                    state.signature_values.insert(
+                        taken_signature,
+                        SignatureValue::UnwrapTakingSignature_TakenSignature {
+                            outer_function: Box::new(outer_function_value),
+                        },
+                    );
+                    recurse(state, inner_node, environment);
+                    state.function_values.remove(&inner_function);
+                    state.signature_values.remove(&taken_signature);
+                }
             }
         }
 
-        let root_node = &self.nodes[0];
-        let mut symbol_values = HashMap::new();
+        let mut state = State {
+            file: self,
+            function_values: HashMap::new(),
+            signature_values: HashMap::new(),
+        };
 
-        recurse(self, &mut symbol_values, root_node);*/
+        recurse(&mut state, 0, Environment::Global);
     }
 }
 

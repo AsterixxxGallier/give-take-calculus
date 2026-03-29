@@ -1,3 +1,60 @@
+take signature Thing
+
+
+take this_thing of signature Thing
+take other_thing of signature Thing
+
+# this_thing != other_thing
+
+define signature Give_This_Thing
+  give this_thing
+
+prove give_this_thing of signature Give_This_Thing
+  give this_thing
+
+unwrap _ from give_this_thing taking this_thing'
+
+# this_thing == this_thing' (!)
+
+define signature Give_Any_Thing
+  conjure thing of signature Thing
+  give thing
+
+prove give_other_thing of signature Give_Any_Thing
+  give other_thing
+
+unwrap _ from give_other_thing taking other_thing'
+
+# other_thing == other_thing' ?
+
+
+# node 0
+define signature Double
+  # node 1
+  take a of signature Thing
+  # node 2
+  give a
+  # node 3
+  give a
+  # node 4
+  conjure b of signature Thing
+  # node 5
+  give b
+  # node 6
+
+prove double of signature Double
+  # proof state = node 1
+  take a of signature Thing
+  # proof state = node 2, a = a
+  give a
+  # proof state = node 3, a = a
+  give a
+  # proof state = node 4, a = a
+  # proof state = node 5, a = a, b conjured
+  give a
+  # proof state = node 6, a = a, b = a
+
+
 take signature Number
 
 define signature Negate
@@ -39,20 +96,35 @@ define signature Not_Not
 take not_not of signature Not_Not
 
 define signature Not
-  take signature P
-  define signature Not_P
-    take p of signature P
-    conjure false of signature False
-    give false
-  give signature Not_P
+  take signature [P]
+  define signature Not_P[P]
+    take [[p]] of signature [P]
+    conjure [[false]] of signature False
+    give [[false]]
+  give signature Not_P[P]
 
 prove not of signature Not
   take signature P
-  define signature Not_P
-    take p of signature P
-    conjure false of signature False
-    give false
-  give signature Not_P
+  # [P] == P
+  define signature Not_P'
+    take [p] of signature P
+    conjure [false] of signature False
+    give [false]
+  # [P] == P
+  give signature Not_P'
+  # does Not_P' match Not_P[P]?
+  #
+  # compare "take [[p]] of signature [P]"
+  #    with "take [p] of signature P"
+  # -> compare "[P]" with "P" -> equal
+  #
+  # compare "conjure [[false]] of signature False"
+  #    with "conjure [false] of signature False"
+  # -> compare "False" with "False" -> equal
+  #
+  # compare "give [[false]]"
+  #    with "give [false]"
+  # -> nothing to compare
 
 define signature Contraposition
   take signature P
