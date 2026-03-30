@@ -1,32 +1,37 @@
-symbol    = { (!("(" | ")" | "=" | " " | "\t" | NEWLINE) ~ ANY)* }
+symbol    = { (!("\'" | "(" | ")" | "=" | " " | "\t" | NEWLINE) ~ ANY)* }
 signature = { "(" ~ symbol ~ ")" }
 function  = { symbol }
 
-conjure_dependencies = { " using" ~ (" " ~ (signature | function))+ }
+signature_literal = { "\'(" ~ symbol ~ ")\'" }
+function_literal  = { "\'" ~ symbol ~ "\'" }
+
+conjure_dependencies = { (" using" ~ (" " ~ (signature | function))+)? }
 
 signature_assignment     =  { signature ~ " = " ~ signature_assignment_rhs }
-signature_assignment_rhs = _{ take_signature | conjure_signature | define_signature | take_signature_from }
-take_signature           =  { "take" }
-conjure_signature        =  { "conjure" ~ conjure_dependencies? }
-define_signature         =  { "define" ~ context? }
-take_signature_from      =  { "take " ~ signature ~ " from " ~ function }
+signature_assignment_rhs = _{ use_signature | take_signature_from | take_signature | conjure_signature | define_signature }
+use_signature            =  { "use " ~ signature }
+take_signature           =  { "take " ~ signature_literal }
+conjure_signature        =  { "conjure" ~ conjure_dependencies }
+define_signature         =  { "define" ~ context }
+take_signature_from      =  { "take " ~ signature_literal ~ " from " ~ function }
 
 function_assignment     =  { function ~ " = " ~ function_assignment_rhs }
-function_assignment_rhs = _{ take_function | conjure_function | define_function | take_function_from | give_signature_to | give_function_to }
-take_function           =  { "take " ~ signature }
-conjure_function        =  { "conjure " ~ signature ~ conjure_dependencies? }
-define_function         =  { "define " ~ signature ~ context? }
-take_function_from      =  { "take " ~ function ~ " from " ~ function }
-give_signature_to       =  { "give " ~ signature ~ " as " ~ signature ~ " to " ~ function }
-give_function_to        =  { "give " ~ function ~ " as " ~ function ~ " to " ~ function }
+function_assignment_rhs = _{ use_function | take_function_from | give_signature_to | give_function_to | take_function | conjure_function | define_function }
+use_function            =  { "use " ~ function }
+take_function           =  { "take " ~ signature ~ " " ~ function_literal }
+conjure_function        =  { "conjure " ~ signature ~ conjure_dependencies }
+define_function         =  { "define " ~ signature ~ context }
+take_function_from      =  { "take " ~ function_literal ~ " from " ~ function }
+give_signature_to       =  { "give " ~ signature ~ " as " ~ signature_literal ~ " to " ~ function }
+give_function_to        =  { "give " ~ function ~ " as " ~ function_literal ~ " to " ~ function }
 
-give_signature = { "give " ~ signature }
-give_function  = { "give " ~ function }
+give_signature = { "give " ~ signature ~ " as " ~ signature_literal }
+give_function  = { "give " ~ function ~ " as " ~ function_literal }
 
 statement = _{ signature_assignment | function_assignment | give_signature | give_function }
 
 prefix  = _{ NEWLINE ~ empty_line* ~ PEEK_ALL }
-context =  { prefix ~ PUSH(indentation) ~ statement ~ (prefix ~ statement)* ~ DROP }
+context =  { (prefix ~ PUSH(indentation) ~ statement ~ (prefix ~ statement)* ~ DROP)? }
 
 file       = _{ empty_line* ~ (statement ~ empty_line*)* ~ EOI }
 empty_line = _{ indentation? ~ comment? ~ NEWLINE }

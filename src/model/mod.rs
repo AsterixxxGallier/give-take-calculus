@@ -27,7 +27,7 @@ pub(crate) enum SignatureOrFunctionId {
     Function(FunctionId),
 }
 
-pub(crate) enum SignatureValue {
+pub(crate) enum SignatureOrigin {
     Take,
     Conjure {
         dependencies: Vec<SignatureOrFunctionId>,
@@ -41,7 +41,7 @@ pub(crate) enum SignatureValue {
     },
 }
 
-pub(crate) enum FunctionValue {
+pub(crate) enum FunctionOrigin {
     Take,
     Conjure {
         dependencies: Vec<SignatureOrFunctionId>,
@@ -73,6 +73,7 @@ pub(crate) struct ContextContents<'s> {
     name_to_function: HashMap<&'s str, FunctionId>,
 }
 
+#[derive(Copy, Clone)]
 pub(crate) enum ContextLocation {
     // the global context
     Global,
@@ -144,8 +145,8 @@ fn resolve_conjure_dependencies<'s>(
 pub(crate) struct Model<'s> {
     signature_names: HashMap<SignatureId, &'s str>,
     function_names: HashMap<FunctionId, &'s str>,
-    signature_values: HashMap<SignatureId, SignatureValue>,
-    function_values: HashMap<FunctionId, FunctionValue>,
+    signature_origins: HashMap<SignatureId, SignatureOrigin>,
+    function_origins: HashMap<FunctionId, FunctionOrigin>,
     function_signatures: HashMap<FunctionId, SignatureId>,
     context_contents: HashMap<ContextId, ContextContents<'s>>,
     context_locations: HashMap<ContextId, ContextLocation>,
@@ -160,8 +161,8 @@ impl<'s> Model<'s> {
         let mut this = Self {
             signature_names: Default::default(),
             function_names: Default::default(),
-            signature_values: Default::default(),
-            function_values: Default::default(),
+            signature_origins: Default::default(),
+            function_origins: Default::default(),
             function_signatures: Default::default(),
             context_contents: Default::default(),
             context_locations: Default::default(),
@@ -216,12 +217,12 @@ impl<'s> Model<'s> {
                     self.signature_locations.insert(lhs, context);
                     match signature_assignment.rhs {
                         SignatureAssignmentRhs::Take(take_signature) => {
-                            self.signature_values.insert(lhs, SignatureValue::Take);
+                            self.signature_origins.insert(lhs, SignatureOrigin::Take);
                         }
                         SignatureAssignmentRhs::Conjure(conjure_signature) => {
-                            self.signature_values.insert(
+                            self.signature_origins.insert(
                                 lhs,
-                                SignatureValue::Conjure {
+                                SignatureOrigin::Conjure {
                                     dependencies: resolve_conjure_dependencies(
                                         &self.deep_resolver(path),
                                         conjure_signature.dependencies,
@@ -232,9 +233,9 @@ impl<'s> Model<'s> {
                         SignatureAssignmentRhs::Define(define_signature) => {
                             let define_context = ContextId::generate();
                             self.build_context(define_context, define_signature.context, path);
-                            self.signature_values.insert(
+                            self.signature_origins.insert(
                                 lhs,
-                                SignatureValue::Define {
+                                SignatureOrigin::Define {
                                     context: define_context,
                                 },
                             );
@@ -245,9 +246,9 @@ impl<'s> Model<'s> {
                                 .resolve_function(take_signature_from.source.0)
                                 .unwrap();
                             let source_signature = self.function_signatures[&source];
-                            let SignatureValue::Define {
+                            let SignatureOrigin::Define {
                                 context: source_signature_context,
-                            } = self.signature_values[&source_signature]
+                            } = self.signature_origins[&source_signature]
                             else {
                                 panic!();
                             };
@@ -261,8 +262,8 @@ impl<'s> Model<'s> {
                                     .public_signatures
                                     .contains(&remote),
                             );
-                            self.signature_values
-                                .insert(lhs, SignatureValue::TakeFrom { remote, source });
+                            self.signature_origins
+                                .insert(lhs, SignatureOrigin::TakeFrom { remote, source });
                         }
                     }
                 }
@@ -283,7 +284,7 @@ impl<'s> Model<'s> {
                                 .resolve_signature(take_function.signature.0)
                                 .unwrap();
                             self.function_signatures.insert(lhs, signature);
-                            self.function_values.insert(lhs, FunctionValue::Take);
+                            self.function_origins.insert(lhs, FunctionOrigin::Take);
                         }
                         FunctionAssignmentRhs::Conjure(conjure_function) => {
                             let signature = self
@@ -291,9 +292,9 @@ impl<'s> Model<'s> {
                                 .resolve_signature(conjure_function.signature.0)
                                 .unwrap();
                             self.function_signatures.insert(lhs, signature);
-                            self.function_values.insert(
+                            self.function_origins.insert(
                                 lhs,
-                                FunctionValue::Conjure {
+                                FunctionOrigin::Conjure {
                                     dependencies: resolve_conjure_dependencies(
                                         &self.deep_resolver(path),
                                         conjure_function.dependencies,
@@ -309,9 +310,9 @@ impl<'s> Model<'s> {
                             self.function_signatures.insert(lhs, signature);
                             let define_context = ContextId::generate();
                             self.build_context(define_context, define_function.context, path);
-                            self.function_values.insert(
+                            self.function_origins.insert(
                                 lhs,
-                                FunctionValue::Define {
+                                FunctionOrigin::Define {
                                     context: define_context,
                                 },
                             );
@@ -323,9 +324,9 @@ impl<'s> Model<'s> {
                                 .resolve_function(take_function_from.source.0)
                                 .unwrap();
                             let source_signature = self.function_signatures[&source];
-                            let SignatureValue::Define {
+                            let SignatureOrigin::Define {
                                 context: source_signature_context,
-                            } = self.signature_values[&source_signature]
+                            } = self.signature_origins[&source_signature]
                             else {
                                 panic!();
                             };
@@ -339,23 +340,23 @@ impl<'s> Model<'s> {
                                     .public_functions
                                     .contains(&remote),
                             );
-                            self.function_values
-                                .insert(lhs, FunctionValue::TakeFrom { remote, source });
+                            self.function_origins
+                                .insert(lhs, FunctionOrigin::TakeFrom { remote, source });
                         }
                         FunctionAssignmentRhs::GiveSignatureTo(give_signature_to) => {
                             // lhs signature unknown at this stage
                             let local = self
                                 .deep_resolver(path)
-                                .resolve_signature(give_signature_to.local.0)
+                                .resolve_signature(give_signature_to.signature.0)
                                 .unwrap();
                             let source = self
                                 .deep_resolver(path)
                                 .resolve_function(give_signature_to.source.0)
                                 .unwrap();
                             let source_signature = self.function_signatures[&source];
-                            let SignatureValue::Define {
+                            let SignatureOrigin::Define {
                                 context: source_signature_context,
-                            } = self.signature_values[&source_signature]
+                            } = self.signature_origins[&source_signature]
                             else {
                                 panic!();
                             };
@@ -369,9 +370,9 @@ impl<'s> Model<'s> {
                                     .public_signatures
                                     .contains(&remote),
                             );
-                            self.function_values.insert(
+                            self.function_origins.insert(
                                 lhs,
-                                FunctionValue::GiveSignatureTo {
+                                FunctionOrigin::GiveSignatureTo {
                                     local,
                                     remote,
                                     source,
@@ -382,16 +383,16 @@ impl<'s> Model<'s> {
                             // lhs signature unknown at this stage
                             let local = self
                                 .deep_resolver(path)
-                                .resolve_function(give_function_to.local.0)
+                                .resolve_function(give_function_to.function.0)
                                 .unwrap();
                             let source = self
                                 .deep_resolver(path)
                                 .resolve_function(give_function_to.source.0)
                                 .unwrap();
                             let source_signature = self.function_signatures[&source];
-                            let SignatureValue::Define {
+                            let SignatureOrigin::Define {
                                 context: source_signature_context,
-                            } = self.signature_values[&source_signature]
+                            } = self.signature_origins[&source_signature]
                             else {
                                 panic!();
                             };
@@ -405,9 +406,9 @@ impl<'s> Model<'s> {
                                     .public_functions
                                     .contains(&remote),
                             );
-                            self.function_values.insert(
+                            self.function_origins.insert(
                                 lhs,
-                                FunctionValue::GiveFunctionTo {
+                                FunctionOrigin::GiveFunctionTo {
                                     local,
                                     remote,
                                     source,
@@ -430,5 +431,43 @@ impl<'s> Model<'s> {
         }
 
         path.pop();
+    }
+
+    pub(crate) fn check(&self) {
+        self.check_context(self.global_context);
+    }
+
+    fn check_context(&self, context: ContextId) {
+        id!(SignatureValueId);
+        id!(FunctionValueId);
+
+        pub(crate) enum SignatureOrFunctionValueId {
+            Signature(SignatureValueId),
+            Function(FunctionValueId),
+        }
+
+        enum SignatureValue {
+            Take {
+                id: SignatureId,
+            },
+            Conjure {
+                id: SignatureId,
+                dependencies: Vec<SignatureOrFunctionValueId>,
+            },
+            Define {
+                dependencies: Vec<SignatureOrFunctionId>,
+                taken_signatures: Vec<String>,
+
+            }
+        }
+
+        let context_location = self.context_locations[&context];
+        match context_location {
+            ContextLocation::Global => {
+
+            }
+            ContextLocation::DefineSignature(_) => {}
+            ContextLocation::DefineFunction(_) => {}
+        }
     }
 }
