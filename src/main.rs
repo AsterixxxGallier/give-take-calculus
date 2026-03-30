@@ -1,9 +1,13 @@
 #![allow(unused)]
 
+use crate::model::Model;
+
 mod parse;
+mod model;
 
 fn main() {
     let text = std::fs::read_to_string("resources/false.txt").unwrap();
-    let statements = parse::parse(&text);
-    println!("{statements:#?}");
+    let parsed_context = parse::parse(&text);
+    let model = Model::build(parsed_context);
+    _ = model;
 }

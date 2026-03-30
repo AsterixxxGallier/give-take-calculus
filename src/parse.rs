@@ -9,10 +9,10 @@ use std::marker::PhantomData;
 struct MyParser;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) struct Signature<'s>(&'s str);
+pub(crate) struct Signature<'s>(pub(crate) &'s str);
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) struct Function<'s>(&'s str);
+pub(crate) struct Function<'s>(pub(crate) &'s str);
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum SignatureOrFunction<'s> {
@@ -21,26 +21,26 @@ pub(crate) enum SignatureOrFunction<'s> {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) struct ConjureDependencies<'s>(Vec<SignatureOrFunction<'s>>);
+pub(crate) struct ConjureDependencies<'s>(pub(crate) Vec<SignatureOrFunction<'s>>);
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct TakeSignature<'s>(PhantomData<&'s ()>);
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ConjureSignature<'s> {
-    dependencies: ConjureDependencies<'s>,
+    pub(crate) dependencies: ConjureDependencies<'s>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct DefineSignature<'s> {
-    context: Statements<'s>,
+    pub(crate) context: Context<'s>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct TakeSignatureFrom<'s> {
     // name of the taken signature in the source function context
-    remote: Signature<'s>,
-    source: Function<'s>,
+    pub(crate) remote: Signature<'s>,
+    pub(crate) source: Function<'s>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -53,50 +53,50 @@ pub(crate) enum SignatureAssignmentRhs<'s> {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct SignatureAssignment<'s> {
-    lhs: Signature<'s>,
-    rhs: SignatureAssignmentRhs<'s>,
+    pub(crate) lhs: Signature<'s>,
+    pub(crate) rhs: SignatureAssignmentRhs<'s>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct TakeFunction<'s> {
-    signature: Signature<'s>,
+    pub(crate) signature: Signature<'s>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ConjureFunction<'s> {
-    signature: Signature<'s>,
-    dependencies: ConjureDependencies<'s>,
+    pub(crate) signature: Signature<'s>,
+    pub(crate) dependencies: ConjureDependencies<'s>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct DefineFunction<'s> {
-    signature: Signature<'s>,
-    context: Statements<'s>,
+    pub(crate) signature: Signature<'s>,
+    pub(crate) context: Context<'s>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct TakeFunctionFrom<'s> {
     // name of the taken function in the source function context
-    remote: Function<'s>,
-    source: Function<'s>,
+    pub(crate) remote: Function<'s>,
+    pub(crate) source: Function<'s>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct GiveSignatureTo<'s> {
     // name of the given signature in this context
-    local: Signature<'s>,
+    pub(crate) local: Signature<'s>,
     // name of the given signature in source function context
-    remote: Signature<'s>,
-    source: Function<'s>,
+    pub(crate) remote: Signature<'s>,
+    pub(crate) source: Function<'s>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct GiveFunctionTo<'s> {
     // name of the given function in this context
-    local: Function<'s>,
+    pub(crate) local: Function<'s>,
     // name of the given function in source function context
-    remote: Function<'s>,
-    source: Function<'s>,
+    pub(crate) remote: Function<'s>,
+    pub(crate) source: Function<'s>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -111,18 +111,18 @@ pub(crate) enum FunctionAssignmentRhs<'s> {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct FunctionAssignment<'s> {
-    lhs: Function<'s>,
-    rhs: FunctionAssignmentRhs<'s>,
+    pub(crate) lhs: Function<'s>,
+    pub(crate) rhs: FunctionAssignmentRhs<'s>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct GiveSignature<'s> {
-    signature: Signature<'s>,
+    pub(crate) signature: Signature<'s>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct GiveFunction<'s> {
-    function: Function<'s>,
+    pub(crate) function: Function<'s>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -134,7 +134,7 @@ pub(crate) enum Statement<'s> {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) struct Statements<'s>(Vec<Statement<'s>>);
+pub(crate) struct Context<'s>(pub(crate) Vec<Statement<'s>>);
 
 fn parse_signature(pair: Pair<Rule>) -> Signature {
     let (symbol,) = pair.into_inner().collect_tuple().unwrap();
@@ -187,7 +187,7 @@ fn parse_define_signature(pair: Pair<Rule>) -> DefineSignature {
         }
     } else {
         DefineSignature {
-            context: Statements(Vec::new()),
+            context: Context(Vec::new()),
         }
     }
 }
@@ -234,7 +234,7 @@ fn parse_define_function(pair: Pair<Rule>) -> DefineFunction {
     } else {
         DefineFunction {
             signature: parse_signature(signature),
-            context: Statements(Vec::new()),
+            context: Context(Vec::new()),
         }
     }
 }
@@ -335,15 +335,15 @@ fn parse_statement(pair: Pair<Rule>) -> Statement {
     }
 }
 
-fn parse_context(pair: Pair<Rule>) -> Statements {
+fn parse_context(pair: Pair<Rule>) -> Context {
     let statements = pair
         .into_inner()
         .map(|statement| parse_statement(statement))
         .collect();
-    Statements(statements)
+    Context(statements)
 }
 
-pub(crate) fn parse(text: &'_ str) -> Statements<'_> {
+pub(crate) fn parse(text: &'_ str) -> Context<'_> {
     let pairs = MyParser::parse(Rule::file, text).unwrap();
     let statements = pairs.filter_map(|statement| {
         if let Rule::EOI = statement.as_rule() {
@@ -352,5 +352,5 @@ pub(crate) fn parse(text: &'_ str) -> Statements<'_> {
             Some(parse_statement(statement))
         }
     }).collect();
-    Statements(statements)
+    Context(statements)
 }
