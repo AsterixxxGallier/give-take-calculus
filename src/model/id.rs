@@ -1,7 +1,7 @@
 use std::fmt::{Debug, Display, Formatter};
 use rand::random;
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub(super) struct Id(u64);
 
 impl Id {

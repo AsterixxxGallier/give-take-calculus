@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use crate::model::Model;
 
 mod parse;
@@ -9,5 +7,5 @@ fn main() {
     let text = std::fs::read_to_string("resources/false.txt").unwrap();
     let parsed_context = parse::parse(&text);
     let model = Model::build(parsed_context);
-    _ = model;
+    model.check();
 }

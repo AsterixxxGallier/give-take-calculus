@@ -1,18 +1,25 @@
 use crate::parse;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 
 mod id;
+mod check;
 
 macro_rules! id {
     ($name:ident) => {
-        #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+        #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
         pub(crate) struct $name(id::Id);
 
         impl $name {
             pub(crate) fn generate() -> Self {
                 Self(id::Id::generate())
+            }
+        }
+
+        impl ::std::fmt::Debug for $name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                write!(f, concat!(stringify!($name), "({})"), self.0)
             }
         }
     };
@@ -24,16 +31,19 @@ id!(FunctionId);
 id!(SignatureLiteralId);
 id!(FunctionLiteralId);
 
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct SignatureDefineDependency {
     signature: SignatureId,
     literal: SignatureLiteralId,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct FunctionDefineDependency {
     function: FunctionId,
     literal: FunctionLiteralId,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum SignatureAssignmentRhs {
     Use {
         literal: SignatureLiteralId,
@@ -56,6 +66,7 @@ pub(crate) enum SignatureAssignmentRhs {
     },
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum FunctionAssignmentRhs {
     Use {
         signature: SignatureId,
@@ -92,6 +103,7 @@ pub(crate) enum FunctionAssignmentRhs {
     },
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum Statement {
     SignatureAssignment {
         lhs: SignatureId,
@@ -111,13 +123,14 @@ pub(crate) enum Statement {
     },
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ContextContents<'s> {
     statements: Vec<Statement>,
     name_to_signature: HashMap<&'s str, SignatureId>,
     name_to_function: HashMap<&'s str, FunctionId>,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum ContextLocation {
     // the global context
     Global,
@@ -173,6 +186,7 @@ fn resolve_conjure_dependencies<'s>(
     (signatures, functions)
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct Model<'s> {
     signature_literal_names: HashMap<SignatureLiteralId, &'s str>,
     function_literal_names: HashMap<FunctionLiteralId, &'s str>,
@@ -291,6 +305,8 @@ impl<'s> Model<'s> {
         for statement in parsed.0 {
             match statement {
                 parse::Statement::SignatureAssignment(signature_assignment) => {
+                    let lhs = SignatureId::generate();
+
                     let rhs = match signature_assignment.rhs {
                         parse::SignatureAssignmentRhs::Use(use_signature) => {
                             let literal = self.signature_literal(use_signature.literal.0);
@@ -318,6 +334,7 @@ impl<'s> Model<'s> {
                                     define_signature.dependencies,
                                 );
                             let define_context = ContextId::generate();
+                            self.context_locations.insert(define_context, ContextLocation::DefineSignature(lhs));
                             self.build_context(define_context, define_signature.context);
                             SignatureAssignmentRhs::Define {
                                 signature_dependencies,
@@ -334,7 +351,6 @@ impl<'s> Model<'s> {
                         }
                     };
 
-                    let lhs = SignatureId::generate();
                     let lhs_name = signature_assignment.lhs.0;
                     contents.name_to_signature.insert(lhs_name, lhs);
                     contents
@@ -344,6 +360,8 @@ impl<'s> Model<'s> {
                     self.signature_locations.insert(lhs, context);
                 }
                 parse::Statement::FunctionAssignment(function_assignment) => {
+                    let lhs = FunctionId::generate();
+
                     let rhs = match function_assignment.rhs {
                         parse::FunctionAssignmentRhs::Use(use_function) => {
                             let signature = contents
@@ -384,6 +402,7 @@ impl<'s> Model<'s> {
                                     define_function.dependencies,
                                 );
                             let define_context = ContextId::generate();
+                            self.context_locations.insert(define_context, ContextLocation::DefineFunction(lhs));
                             self.build_context(define_context, define_function.context);
                             FunctionAssignmentRhs::Define {
                                 signature,
@@ -429,7 +448,6 @@ impl<'s> Model<'s> {
                         }
                     };
 
-                    let lhs = FunctionId::generate();
                     let lhs_name = function_assignment.lhs.0;
                     contents.name_to_function.insert(lhs_name, lhs);
                     contents
