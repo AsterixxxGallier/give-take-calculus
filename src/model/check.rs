@@ -79,7 +79,7 @@ enum FunctionValue {
 
 impl ContextValue {
     fn substitute_taken_signature(&mut self, id: SignatureLiteralId, value: &SignatureValue) {
-        self.taken_signatures.remove(self.taken_signatures.binary_search(&id).unwrap());
+        // self.taken_signatures.remove(self.taken_signatures.binary_search(&id).unwrap());
         for (_, other) in &mut self.given_signatures {
             other.substitute_taken_signature(id, value);
         }
@@ -89,7 +89,7 @@ impl ContextValue {
     }
 
     fn substitute_taken_function(&mut self, id: FunctionLiteralId, value: &FunctionValue) {
-        self.taken_functions.remove(self.taken_functions.binary_search(&id).unwrap());
+        // self.taken_functions.remove(self.taken_functions.binary_search(&id).unwrap());
         for (_, other) in &mut self.given_signatures {
             other.substitute_taken_function(id, value);
         }
