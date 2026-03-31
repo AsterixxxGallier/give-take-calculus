@@ -1,160 +1,77 @@
+.implies -(p) -(q) +{ -p ?q +q }
+
 (implies) = define
-  (p) = take
-  (q) = take
-  (p_q) = define
-    p = take (p)
+  (p) = take '(p)'
+  (q) = take '(q)'
+  (p_q_signature) = define with (p) as '(p)' and (q) as '(q)'
+    (p) = use '(p)'
+    (q) = use '(q)'
+    (p) = take '(p)'
+    (q) = take '(q)'
+    p = take (p) 'p'
     q = conjure (q) using p
-    give q
-  give (p_q)
+    give q as 'q'
+  p_q_signature = define (p_q_signature)
+    (p) = take '(p)'
+    (q) = take '(q)'
+    p = take (p) 'p'
+    q = conjure (q) using p
+    give q as 'q'
+  give (p_q) as '(p_q)'
 
 implies = define (implies)
-  (p) = take
-  (q) = take
+  (p) = take '(p)'
+  (q) = take '(q)'
   (p_q) = define
-    p = take (p)
+    (p) = use (p)
+    (q) = use (q)
+    p = take (p) 'p'
     q = conjure (q) using p
-    give p
-  give (p_q)
+    give q as 'q'
+  give (p_q) as '(p_q)'
+
+(iff) = define
+  implies = use implies
+  (p) = take '(p)'
+  (q) = take '(q)'
+  p_implies = give (p) as '(p)' to implies
+  p_implies_q = give (q) as '(q)' to p_implies
+  (p_q) = take '(p_q)' from p_implies_q
+  q_implies = give (q) as '(p)' to implies
+  q_implies_p = give (p) as '(q)' to q_implies
+  (q_p) = take '(p_q)' from q_implies_p
+  (p_iff_q) = define
+    (p_q) = use (p_q)
+    (q_p) = use (q_p)
+    p_q = conjure (p_q)
+    q_p = conjure (q_p)
+    give p_q as 'p_q'
+    give q_p as 'q_p'
+  give (p_iff_q) as '(p_iff_q)'
 
 (false) = define
-  (p) = take
+  (p) = take '(p)'
   p = conjure (p)
-  give p
+  give p as 'p'
 
 (not) = define
-  (p) = take
+  (false) = use (false)
+  (p) = take '(p)'
   (not_p) = define
-    p = take (p)
-    false = conjure (false)
-    give false
-  give (not_p)
+    (false) = use (false)
+    (p) = use (p)
+    p = take (p) 'p'
+    false = conjure (false) using p
+    give false as 'false'
+  give (not_p) as '(not_p)'
 
 not = define (not)
-  (p) = take
+  (false) = use (false)
+  (p) = take '(p)'
   (not_p) = define
-    p = take (p)
-    false = conjure (false)
-    give false
-  give (not_p)
-
-(not_not) = define
-  (p) = take
-
-  produce_not_p = give (p) as (p) to not
-  (not_p) = take (not_p) from produce_not_p
-
-  # from n now on, syntax sugar:
-  # (not_p) = take (not_p) from { give (p) as (p) to not }
-  # or even:
-  # (not_p) = take from { give (p) to not }
-
-  (not_not_p) = take (not_p) from { give (not_p) as (p) to not }
-
-  not_not_p = take (not_not_p)
-  p = conjure (p) using not_not_p
-  give p
-
-# the only axiom in here
-not_not = take (not_not)
-
-# (p => q) => (!q => !p)
-# given:
-#   p => q
-# to prove:
-#   (q => false) => (p => false)
-# basically just transitivity of implication (p => q => false)
-(contraposition) = define
-  (p) = take
-  (q) = take
-
-  (p_q) = take (p_q) from { give (q) to { give (p) to implies } }
-  # from now on, syntax sugar:
-  # (p_q) = take from { give (p) (q) to implies }
-
-  (not_p) = take from { give (p) to not }
-  (not_q) = take (not_p) from { give (q) as (p) to not }
-  (not_q_not_p) = take (p_q) from { give (not_q) as p and (not_p) as q to implies }
-
-  p_q = take (p_q)
-  not_q_not_p = conjure (not_q_not_p) using p_q
-  give not_q_not_p
-
-contraposition = define (contraposition)
-  (p) = take
-  (q) = take
-
-  (p_q) = take from { give (p) (q) to implies }
-  (not_p) = take from { give (p) to not }
-  (not_q) = take (not_p) from { give (q) as (p) to not }
-  (not_q_not_p) = take (p_q) from { give (not_q) as p and (not_p) as q to implies }
-
-  p_q = take (p_q)
-
-  not_q_not_p = define (not_q_not_p)
-    not_q = take (not_q)
-    not_p = define (not_p)
-      p = take (p)
-      q = take from { give (p) to p_q }
-      false = take from { give (q) to not_q }
-      give false
-    give not_p
-
-  give not_q_not_p
-
-# (!q => !p) => (p => q)
-# given:
-#   (q => false) => (p => false)
-# to prove:
-#   p => q
-(contraposition_reverse) = define
-  (p) = take
-  (q) = take
-
-  (p_q) = take from { give (p) (q) to implies }
-  (not_p) = take from { give (p) to not }
-  (not_q) = take (not_p) from { give (q) as (p) to not }
-  (not_q_not_p) = take (p_q) from { give (not_q) as (p) and (not_p) as (q) to implies }
-
-  not_q_not_p = take (not_q_not_p)
-  p_q = conjure (p_q) using not_q_not_p
-  give p_q
-
-contraposition_reverse = define (contraposition_reverse)
-  (p) = take
-  (q) = take
-
-  (p_q) = take from { give (p) (q) to implies }
-  (not_p) = take from { give (p) to not }
-  (not_q) = take (not_p) from { give (q) as (p) to not }
-  (not_q_not_p) = take (p_q) from { give (not_q) as (p) and (not_p) as (q) to implies }
-
-  (not_not_p) = take (not_p) from { give (not_p) as (p) to not }
-  (not_not_q) = take (not_p) from { give (not_q) as (p) to not }
-  (not_not_p_not_not_q) = take (p_q) from { give (not_not_p) as (p) and (not_not_q) as (q) to implies }
-
-  not_q_not_p = take (not_q_not_p)
-
-  p_q = define (p_q)
-    p = take (p)
-
-    not_q_not_p = define (not_q_not_p)
-      not_q = take (not_q)
-      not_p = take q from { give not_q as p to not_q_not_p }
-      give not_p
-
-    not_not_p = define (not_not_p)
-      not_p = take (not_p)
-      false = take from { give not_p as p to not_p }
-      give false
-
-    not_not_p_not_not_q = take not_q_not_p from {
-      give (not_q) as (p) and (not_p) as (q) and not_q_not_p as p_q to contraposition
-    }
-
-    not_not_q = take q from { give not_not_p as p to not_not_p_not_not_q }
-
-    q = take p from { give (q) as (p) and not_not_q as not_not_p to not_not }
-
-    give q
-
-  give p_q
+    (false) = use (false)
+    (p) = use (p)
+    p = take (p) 'p'
+    false = conjure (false) using p
+    give false as 'false'
+  give (not_p) as '(not_p)'

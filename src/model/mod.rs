@@ -24,22 +24,30 @@ id!(FunctionId);
 id!(SignatureLiteralId);
 id!(FunctionLiteralId);
 
-pub(crate) enum SignatureOrFunctionId {
-    Signature(SignatureId),
-    Function(FunctionId),
+pub(crate) struct SignatureDefineDependency {
+    signature: SignatureId,
+    literal: SignatureLiteralId,
 }
 
-pub(crate) enum SignatureOrigin {
+pub(crate) struct FunctionDefineDependency {
+    function: FunctionId,
+    literal: FunctionLiteralId,
+}
+
+pub(crate) enum SignatureAssignmentRhs {
     Use {
-        signature: SignatureId,
+        literal: SignatureLiteralId,
     },
     Take {
         literal: SignatureLiteralId,
     },
     Conjure {
-        dependencies: Vec<SignatureOrFunctionId>,
+        signature_dependencies: Vec<SignatureId>,
+        function_dependencies: Vec<FunctionId>,
     },
     Define {
+        signature_dependencies: Vec<SignatureDefineDependency>,
+        function_dependencies: Vec<FunctionDefineDependency>,
         context: ContextId,
     },
     TakeFrom {
@@ -48,9 +56,10 @@ pub(crate) enum SignatureOrigin {
     },
 }
 
-pub(crate) enum FunctionOrigin {
+pub(crate) enum FunctionAssignmentRhs {
     Use {
-        function: FunctionId,
+        signature: SignatureId,
+        literal: FunctionLiteralId,
     },
     Take {
         signature: SignatureId,
@@ -58,10 +67,13 @@ pub(crate) enum FunctionOrigin {
     },
     Conjure {
         signature: SignatureId,
-        dependencies: Vec<SignatureOrFunctionId>,
+        signature_dependencies: Vec<SignatureId>,
+        function_dependencies: Vec<FunctionId>,
     },
     Define {
         signature: SignatureId,
+        signature_dependencies: Vec<SignatureDefineDependency>,
+        function_dependencies: Vec<FunctionDefineDependency>,
         context: ContextId,
     },
     TakeFrom {
@@ -82,10 +94,12 @@ pub(crate) enum FunctionOrigin {
 
 pub(crate) enum Statement {
     SignatureAssignment {
-        signature: SignatureId,
+        lhs: SignatureId,
+        rhs: SignatureAssignmentRhs,
     },
     FunctionAssignment {
-        function: FunctionId,
+        lhs: FunctionId,
+        rhs: FunctionAssignmentRhs,
     },
     GiveSignature {
         signature: SignatureId,
@@ -130,19 +144,33 @@ impl<'s> ResolveNames<'s> for ContextContents<'s> {
 fn resolve_conjure_dependencies<'s>(
     resolver: &impl ResolveNames<'s>,
     conjure_dependencies: parse::ConjureDependencies<'s>,
-) -> Vec<SignatureOrFunctionId> {
-    conjure_dependencies
-        .0
+) -> (Vec<SignatureId>, Vec<FunctionId>) {
+    let (signatures, functions): (Vec<_>, Vec<_>) =
+        conjure_dependencies
+            .0
+            .into_iter()
+            .partition(|conjure_dependency| {
+                matches!(conjure_dependency, parse::ConjureDependency::Signature(_))
+            });
+    let signatures = signatures
         .into_iter()
-        .map(|dependency| match dependency {
-            parse::SignatureOrFunction::Signature(signature) => {
-                SignatureOrFunctionId::Signature(resolver.resolve_signature(signature.0).unwrap())
-            }
-            parse::SignatureOrFunction::Function(function) => {
-                SignatureOrFunctionId::Function(resolver.resolve_function(function.0).unwrap())
-            }
+        .map(|conjure_dependency| {
+            let parse::ConjureDependency::Signature(signature) = conjure_dependency else {
+                unreachable!()
+            };
+            resolver.resolve_signature(signature.0).unwrap()
         })
-        .collect()
+        .collect();
+    let functions = functions
+        .into_iter()
+        .map(|conjure_dependency| {
+            let parse::ConjureDependency::Function(function) = conjure_dependency else {
+                unreachable!()
+            };
+            resolver.resolve_function(function.0).unwrap()
+        })
+        .collect();
+    (signatures, functions)
 }
 
 pub(crate) struct Model<'s> {
@@ -152,13 +180,13 @@ pub(crate) struct Model<'s> {
     name_to_function_literal: HashMap<&'s str, FunctionLiteralId>,
     signature_names: HashMap<SignatureId, &'s str>,
     function_names: HashMap<FunctionId, &'s str>,
-    signature_origins: HashMap<SignatureId, SignatureOrigin>,
-    function_origins: HashMap<FunctionId, FunctionOrigin>,
     context_contents: HashMap<ContextId, ContextContents<'s>>,
     context_locations: HashMap<ContextId, ContextLocation>,
     signature_locations: HashMap<SignatureId, ContextId>,
     function_locations: HashMap<FunctionId, ContextId>,
     global_context: ContextId,
+    // children first
+    contexts: Vec<ContextId>,
 }
 
 impl<'s> Model<'s> {
@@ -171,13 +199,12 @@ impl<'s> Model<'s> {
             name_to_function_literal: Default::default(),
             signature_names: Default::default(),
             function_names: Default::default(),
-            signature_origins: Default::default(),
-            function_origins: Default::default(),
             context_contents: Default::default(),
             context_locations: Default::default(),
             signature_locations: Default::default(),
             function_locations: Default::default(),
             global_context: global_context_id,
+            contexts: Default::default(),
         };
         this.build_global_context(global_context);
         this
@@ -186,7 +213,7 @@ impl<'s> Model<'s> {
     fn build_global_context(&mut self, parsed: parse::Context<'s>) {
         self.context_locations
             .insert(self.global_context, ContextLocation::Global);
-        self.build_context(self.global_context, parsed, None);
+        self.build_context(self.global_context, parsed);
     }
 
     fn signature_literal(&mut self, name: &'s str) -> SignatureLiteralId {
@@ -213,190 +240,206 @@ impl<'s> Model<'s> {
         }
     }
 
-    fn build_context(
+    fn resolve_define_dependencies(
         &mut self,
-        context: ContextId,
-        parsed: parse::Context<'s>,
-        parent: Option<ContextId>,
+        resolver: &impl ResolveNames<'s>,
+        define_dependencies: parse::DefineDependencies<'s>,
+    ) -> (
+        Vec<SignatureDefineDependency>,
+        Vec<FunctionDefineDependency>,
     ) {
-        let contents = ContextContents {
+        let (signatures, functions): (Vec<_>, Vec<_>) = define_dependencies
+            .0
+            .into_iter()
+            .partition(|define_dependency| {
+                matches!(define_dependency, parse::DefineDependency::Signature(_))
+            });
+        let signatures = signatures
+            .into_iter()
+            .map(|define_dependency| {
+                let parse::DefineDependency::Signature(signature) = define_dependency else {
+                    unreachable!()
+                };
+                SignatureDefineDependency {
+                    signature: resolver.resolve_signature(signature.signature.0).unwrap(),
+                    literal: self.signature_literal(signature.literal.0),
+                }
+            })
+            .collect();
+        let functions = functions
+            .into_iter()
+            .map(|define_dependency| {
+                let parse::DefineDependency::Function(function) = define_dependency else {
+                    unreachable!()
+                };
+                FunctionDefineDependency {
+                    function: resolver.resolve_function(function.function.0).unwrap(),
+                    literal: self.function_literal(function.literal.0),
+                }
+            })
+            .collect();
+        (signatures, functions)
+    }
+
+    fn build_context(&mut self, context: ContextId, parsed: parse::Context<'s>) {
+        let mut contents = ContextContents {
             statements: Vec::new(),
             name_to_signature: Default::default(),
             name_to_function: Default::default(),
         };
-        self.context_contents.insert(context, contents);
+
         for statement in parsed.0 {
             match statement {
                 parse::Statement::SignatureAssignment(signature_assignment) => {
-                    let lhs = SignatureId::generate();
-                    let lhs_name = signature_assignment.lhs.0;
-                    let contents = self.context_contents.get_mut(&context).unwrap();
-                    contents.name_to_signature.insert(lhs_name, lhs);
-                    contents
-                        .statements
-                        .push(Statement::SignatureAssignment { signature: lhs });
-                    self.signature_names.insert(lhs, lhs_name);
-                    self.signature_locations.insert(lhs, context);
-
-                    match signature_assignment.rhs {
+                    let rhs = match signature_assignment.rhs {
                         parse::SignatureAssignmentRhs::Use(use_signature) => {
-                            let parent = parent.expect(
-                                "SignatureAssignmentRhs::use encountered in global context",
-                            );
-                            let signature = self.context_contents[&parent]
-                                .resolve_signature(use_signature.signature.0)
-                                .unwrap();
-                            self.signature_origins
-                                .insert(lhs, SignatureOrigin::Use { signature });
+                            let literal = self.signature_literal(use_signature.literal.0);
+                            SignatureAssignmentRhs::Use { literal }
                         }
                         parse::SignatureAssignmentRhs::Take(take_signature) => {
                             let literal = self.signature_literal(take_signature.literal.0);
-                            self.signature_origins
-                                .insert(lhs, SignatureOrigin::Take { literal });
+                            SignatureAssignmentRhs::Take { literal }
                         }
                         parse::SignatureAssignmentRhs::Conjure(conjure_signature) => {
-                            self.signature_origins.insert(
-                                lhs,
-                                SignatureOrigin::Conjure {
-                                    dependencies: resolve_conjure_dependencies(
-                                        &self.context_contents[&context],
-                                        conjure_signature.dependencies,
-                                    ),
-                                },
-                            );
+                            let (signature_dependencies, function_dependencies) =
+                                resolve_conjure_dependencies(
+                                    &contents,
+                                    conjure_signature.dependencies,
+                                );
+                            SignatureAssignmentRhs::Conjure {
+                                signature_dependencies,
+                                function_dependencies,
+                            }
                         }
                         parse::SignatureAssignmentRhs::Define(define_signature) => {
+                            let (signature_dependencies, function_dependencies) = self
+                                .resolve_define_dependencies(
+                                    &contents,
+                                    define_signature.dependencies,
+                                );
                             let define_context = ContextId::generate();
-                            self.build_context(
-                                define_context,
-                                define_signature.context,
-                                Some(context),
-                            );
-                            self.signature_origins.insert(
-                                lhs,
-                                SignatureOrigin::Define {
-                                    context: define_context,
-                                },
-                            );
+                            self.build_context(define_context, define_signature.context);
+                            SignatureAssignmentRhs::Define {
+                                signature_dependencies,
+                                function_dependencies,
+                                context: define_context,
+                            }
                         }
                         parse::SignatureAssignmentRhs::TakeFrom(take_signature_from) => {
-                            let source = self.context_contents[&context]
+                            let source = contents
                                 .resolve_function(take_signature_from.source.0)
                                 .unwrap();
                             let literal = self.signature_literal(take_signature_from.literal.0);
-                            self.signature_origins
-                                .insert(lhs, SignatureOrigin::TakeFrom { literal, source });
+                            SignatureAssignmentRhs::TakeFrom { literal, source }
                         }
-                    }
-                }
-                parse::Statement::FunctionAssignment(function_assignment) => {
-                    let lhs = FunctionId::generate();
-                    let lhs_name = function_assignment.lhs.0;
-                    let contents = self.context_contents.get_mut(&context).unwrap();
-                    contents.name_to_function.insert(lhs_name, lhs);
+                    };
+
+                    let lhs = SignatureId::generate();
+                    let lhs_name = signature_assignment.lhs.0;
+                    contents.name_to_signature.insert(lhs_name, lhs);
                     contents
                         .statements
-                        .push(Statement::FunctionAssignment { function: lhs });
-                    self.function_names.insert(lhs, lhs_name);
-                    self.function_locations.insert(lhs, context);
-                    match function_assignment.rhs {
+                        .push(Statement::SignatureAssignment { lhs, rhs });
+                    self.signature_names.insert(lhs, lhs_name);
+                    self.signature_locations.insert(lhs, context);
+                }
+                parse::Statement::FunctionAssignment(function_assignment) => {
+                    let rhs = match function_assignment.rhs {
                         parse::FunctionAssignmentRhs::Use(use_function) => {
-                            let parent = parent
-                                .expect("FunctionAssignmentRhs::use encountered in global context");
-                            let function = self.context_contents[&parent]
-                                .resolve_function(use_function.function.0)
+                            let signature = contents
+                                .resolve_signature(use_function.signature.0)
                                 .unwrap();
-                            self.function_origins
-                                .insert(lhs, FunctionOrigin::Use { function });
+                            let literal = self.function_literal(use_function.literal.0);
+                            FunctionAssignmentRhs::Use { signature, literal }
                         }
                         parse::FunctionAssignmentRhs::Take(take_function) => {
-                            let signature = self.context_contents[&context]
+                            let signature = contents
                                 .resolve_signature(take_function.signature.0)
                                 .unwrap();
                             let literal = self.function_literal(take_function.literal.0);
-                            self.function_origins
-                                .insert(lhs, FunctionOrigin::Take { signature, literal });
+                            FunctionAssignmentRhs::Take { signature, literal }
                         }
                         parse::FunctionAssignmentRhs::Conjure(conjure_function) => {
-                            let signature = self.context_contents[&context]
+                            let signature = contents
                                 .resolve_signature(conjure_function.signature.0)
                                 .unwrap();
-                            self.function_origins.insert(
-                                lhs,
-                                FunctionOrigin::Conjure {
-                                    signature,
-                                    dependencies: resolve_conjure_dependencies(
-                                        &self.context_contents[&context],
-                                        conjure_function.dependencies,
-                                    ),
-                                },
-                            );
+                            let (signature_dependencies, function_dependencies) =
+                                resolve_conjure_dependencies(
+                                    &contents,
+                                    conjure_function.dependencies,
+                                );
+                            FunctionAssignmentRhs::Conjure {
+                                signature,
+                                signature_dependencies,
+                                function_dependencies,
+                            }
                         }
                         parse::FunctionAssignmentRhs::Define(define_function) => {
-                            let signature = self.context_contents[&context]
+                            let signature = contents
                                 .resolve_signature(define_function.signature.0)
                                 .unwrap();
+                            let (signature_dependencies, function_dependencies) = self
+                                .resolve_define_dependencies(
+                                    &contents,
+                                    define_function.dependencies,
+                                );
                             let define_context = ContextId::generate();
-                            self.build_context(
-                                define_context,
-                                define_function.context,
-                                Some(context),
-                            );
-                            self.function_origins.insert(
-                                lhs,
-                                FunctionOrigin::Define {
-                                    signature,
-                                    context: define_context,
-                                },
-                            );
+                            self.build_context(define_context, define_function.context);
+                            FunctionAssignmentRhs::Define {
+                                signature,
+                                signature_dependencies,
+                                function_dependencies,
+                                context: define_context,
+                            }
                         }
                         parse::FunctionAssignmentRhs::TakeFrom(take_function_from) => {
-                            let source = self.context_contents[&context]
+                            let source = contents
                                 .resolve_function(take_function_from.source.0)
                                 .unwrap();
                             let literal = self.function_literal(take_function_from.literal.0);
-                            self.function_origins
-                                .insert(lhs, FunctionOrigin::TakeFrom { literal, source });
+                            FunctionAssignmentRhs::TakeFrom { literal, source }
                         }
                         parse::FunctionAssignmentRhs::GiveSignatureTo(give_signature_to) => {
-                            let signature = self.context_contents[&context]
+                            let signature = contents
                                 .resolve_signature(give_signature_to.signature.0)
                                 .unwrap();
                             let literal = self.signature_literal(give_signature_to.literal.0);
-                            let source = self.context_contents[&context]
+                            let source = contents
                                 .resolve_function(give_signature_to.source.0)
                                 .unwrap();
-                            self.function_origins.insert(
-                                lhs,
-                                FunctionOrigin::GiveSignatureTo {
-                                    signature,
-                                    literal,
-                                    source,
-                                },
-                            );
+                            FunctionAssignmentRhs::GiveSignatureTo {
+                                signature,
+                                literal,
+                                source,
+                            }
                         }
                         parse::FunctionAssignmentRhs::GiveFunctionTo(give_function_to) => {
-                            let function = self.context_contents[&context]
+                            let function = contents
                                 .resolve_function(give_function_to.function.0)
                                 .unwrap();
                             let literal = self.function_literal(give_function_to.literal.0);
-                            let source = self.context_contents[&context]
+                            let source = contents
                                 .resolve_function(give_function_to.source.0)
                                 .unwrap();
-                            self.function_origins.insert(
-                                lhs,
-                                FunctionOrigin::GiveFunctionTo {
-                                    function,
-                                    literal,
-                                    source,
-                                },
-                            );
+                            FunctionAssignmentRhs::GiveFunctionTo {
+                                function,
+                                literal,
+                                source,
+                            }
                         }
-                    }
+                    };
+
+                    let lhs = FunctionId::generate();
+                    let lhs_name = function_assignment.lhs.0;
+                    contents.name_to_function.insert(lhs_name, lhs);
+                    contents
+                        .statements
+                        .push(Statement::FunctionAssignment { lhs, rhs });
+                    self.function_names.insert(lhs, lhs_name);
+                    self.function_locations.insert(lhs, context);
                 }
                 parse::Statement::GiveSignature(give_signature) => {
                     let literal = self.signature_literal(give_signature.literal.0);
-                    let contents = self.context_contents.get_mut(&context).unwrap();
                     let signature = contents
                         .resolve_signature(give_signature.signature.0)
                         .unwrap();
@@ -406,7 +449,6 @@ impl<'s> Model<'s> {
                 }
                 parse::Statement::GiveFunction(give_function) => {
                     let literal = self.function_literal(give_function.literal.0);
-                    let contents = self.context_contents.get_mut(&context).unwrap();
                     let function = contents.resolve_function(give_function.function.0).unwrap();
                     contents
                         .statements
@@ -414,40 +456,8 @@ impl<'s> Model<'s> {
                 }
             }
         }
-    }
 
-    pub(crate) fn check(&self) {
-        self.check_context(self.global_context);
-    }
-
-    fn check_context(&self, context: ContextId) {
-        id!(SignatureValueId);
-        id!(FunctionValueId);
-
-        pub(crate) enum SignatureOrFunctionValueId {
-            Signature(SignatureValueId),
-            Function(FunctionValueId),
-        }
-
-        enum SignatureValue {
-            Take {
-                id: SignatureId,
-            },
-            Conjure {
-                id: SignatureId,
-                dependencies: Vec<SignatureOrFunctionValueId>,
-            },
-            Define {
-                dependencies: Vec<SignatureOrFunctionId>,
-                taken_signatures: Vec<String>,
-            },
-        }
-
-        let context_location = self.context_locations[&context];
-        match context_location {
-            ContextLocation::Global => {}
-            ContextLocation::DefineSignature(_) => {}
-            ContextLocation::DefineFunction(_) => {}
-        }
+        self.context_contents.insert(context, contents);
+        self.contexts.push(context);
     }
 }

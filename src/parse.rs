@@ -20,17 +20,38 @@ pub(crate) struct SignatureLiteral<'s>(pub(crate) &'s str);
 pub(crate) struct FunctionLiteral<'s>(pub(crate) &'s str);
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) enum SignatureOrFunction<'s> {
+pub(crate) enum ConjureDependency<'s> {
     Signature(Signature<'s>),
     Function(Function<'s>),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) struct ConjureDependencies<'s>(pub(crate) Vec<SignatureOrFunction<'s>>);
+pub(crate) struct ConjureDependencies<'s>(pub(crate) Vec<ConjureDependency<'s>>);
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct SignatureDefineDependency<'s> {
+    pub(crate) signature: Signature<'s>,
+    pub(crate) literal: SignatureLiteral<'s>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct FunctionDefineDependency<'s> {
+    pub(crate) function: Function<'s>,
+    pub(crate) literal: FunctionLiteral<'s>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) enum DefineDependency<'s> {
+    Signature(SignatureDefineDependency<'s>),
+    Function(FunctionDefineDependency<'s>),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct DefineDependencies<'s>(pub(crate) Vec<DefineDependency<'s>>);
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct UseSignature<'s> {
-    pub(crate) signature: Signature<'s>,
+    pub(crate) literal: SignatureLiteral<'s>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -45,6 +66,7 @@ pub(crate) struct ConjureSignature<'s> {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct DefineSignature<'s> {
+    pub(crate) dependencies: DefineDependencies<'s>,
     pub(crate) context: Context<'s>,
 }
 
@@ -71,7 +93,8 @@ pub(crate) struct SignatureAssignment<'s> {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct UseFunction<'s> {
-    pub(crate) function: Function<'s>,
+    pub(crate) signature: Signature<'s>,
+    pub(crate) literal: FunctionLiteral<'s>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -89,6 +112,7 @@ pub(crate) struct ConjureFunction<'s> {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct DefineFunction<'s> {
     pub(crate) signature: Signature<'s>,
+    pub(crate) dependencies: DefineDependencies<'s>,
     pub(crate) context: Context<'s>,
 }
 
@@ -172,12 +196,12 @@ fn parse_function_literal(pair: Pair<Rule>) -> FunctionLiteral {
     FunctionLiteral(symbol.as_str())
 }
 
-fn parse_signature_or_function(pair: Pair<Rule>) -> SignatureOrFunction {
+fn parse_conjure_dependency(pair: Pair<Rule>) -> ConjureDependency {
     let rule = pair.as_rule();
     let (symbol,) = pair.into_inner().collect_tuple().unwrap();
     match rule {
-        Rule::signature => SignatureOrFunction::Signature(Signature(symbol.as_str())),
-        Rule::function => SignatureOrFunction::Function(Function(symbol.as_str())),
+        Rule::signature => ConjureDependency::Signature(Signature(symbol.as_str())),
+        Rule::function => ConjureDependency::Function(Function(symbol.as_str())),
         _ => unreachable!(),
     }
 }
@@ -185,15 +209,48 @@ fn parse_signature_or_function(pair: Pair<Rule>) -> SignatureOrFunction {
 fn parse_conjure_dependencies(pair: Pair<Rule>) -> ConjureDependencies {
     let dependencies = pair
         .into_inner()
-        .map(|dependency| parse_signature_or_function(dependency))
+        .map(|dependency| parse_conjure_dependency(dependency))
         .collect();
     ConjureDependencies(dependencies)
 }
 
-fn parse_use_signature(pair: Pair<Rule>) -> UseSignature {
-    let (signature,) = pair.into_inner().collect_tuple().unwrap();
-    UseSignature {
+fn parse_signature_define_dependency(pair: Pair<Rule>) -> SignatureDefineDependency {
+    let (signature, literal) = pair.into_inner().collect_tuple().unwrap();
+    SignatureDefineDependency {
         signature: parse_signature(signature),
+        literal: parse_signature_literal(literal),
+    }
+}
+
+fn parse_function_define_dependency(pair: Pair<Rule>) -> FunctionDefineDependency {
+    let (function, literal) = pair.into_inner().collect_tuple().unwrap();
+    FunctionDefineDependency {
+        function: parse_function(function),
+        literal: parse_function_literal(literal),
+    }
+}
+
+fn parse_define_dependency(pair: Pair<Rule>) -> DefineDependency {
+    let rule = pair.as_rule();
+    match rule {
+        Rule::signature_define_dependency => DefineDependency::Signature(parse_signature_define_dependency(pair)),
+        Rule::function_define_dependency => DefineDependency::Function(parse_function_define_dependency(pair)),
+        _ => unreachable!(),
+    }
+}
+
+fn parse_define_dependencies(pair: Pair<Rule>) -> DefineDependencies {
+    let dependencies = pair
+        .into_inner()
+        .map(|dependency| parse_define_dependency(dependency))
+        .collect();
+    DefineDependencies(dependencies)
+}
+
+fn parse_use_signature(pair: Pair<Rule>) -> UseSignature {
+    let (literal,) = pair.into_inner().collect_tuple().unwrap();
+    UseSignature {
+        literal: parse_signature_literal(literal),
     }
 }
 
@@ -212,8 +269,9 @@ fn parse_conjure_signature(pair: Pair<Rule>) -> ConjureSignature {
 }
 
 fn parse_define_signature(pair: Pair<Rule>) -> DefineSignature {
-    let (context,) = pair.into_inner().collect_tuple().unwrap();
+    let (dependencies, context,) = pair.into_inner().collect_tuple().unwrap();
     DefineSignature {
+        dependencies: parse_define_dependencies(dependencies),
         context: parse_context(context),
     }
 }
@@ -227,9 +285,10 @@ fn parse_take_signature_from(pair: Pair<Rule>) -> TakeSignatureFrom {
 }
 
 fn parse_use_function(pair: Pair<Rule>) -> UseFunction {
-    let (function,) = pair.into_inner().collect_tuple().unwrap();
+    let (signature, literal) = pair.into_inner().collect_tuple().unwrap();
     UseFunction {
-        function: parse_function(function),
+        signature: parse_signature(signature),
+        literal: parse_function_literal(literal),
     }
 }
 
@@ -250,9 +309,10 @@ fn parse_conjure_function(pair: Pair<Rule>) -> ConjureFunction {
 }
 
 fn parse_define_function(pair: Pair<Rule>) -> DefineFunction {
-    let (signature, context) = pair.into_inner().collect_tuple().unwrap();
+    let (signature, dependencies, context) = pair.into_inner().collect_tuple().unwrap();
     DefineFunction {
         signature: parse_signature(signature),
+        dependencies: parse_define_dependencies(dependencies),
         context: parse_context(context),
     }
 }
