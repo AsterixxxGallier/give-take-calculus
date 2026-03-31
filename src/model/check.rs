@@ -1,13 +1,18 @@
+#![allow(unused, reason = "conjuration enumeration code currently unused")]
+
 use crate::model::*;
 use itertools::Itertools;
+use std::fmt;
+use std::fmt::Formatter;
+use std::io::stdout;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum ConjureSignatureMarker {
     Id(SignatureId),
     Index(u64),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum ConjureFunctionMarker {
     Id(FunctionId),
     Index(u64),
@@ -23,12 +28,6 @@ struct ContextValue {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 enum SignatureValue {
-    Variable {
-        signature: SignatureId,
-    },
-    Use {
-        literal: SignatureLiteralId,
-    },
     Take {
         literal: SignatureLiteralId,
     },
@@ -38,8 +37,6 @@ enum SignatureValue {
         function_dependencies: Vec<FunctionValue>,
     },
     Define {
-        signature_dependencies: Vec<(SignatureLiteralId, SignatureValue)>,
-        function_dependencies: Vec<(FunctionLiteralId, FunctionValue)>,
         context: Box<ContextValue>,
     },
     TakeFrom {
@@ -50,13 +47,6 @@ enum SignatureValue {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 enum FunctionValue {
-    Variable {
-        function: FunctionId,
-    },
-    Use {
-        signature: Box<SignatureValue>,
-        literal: FunctionLiteralId,
-    },
     Take {
         signature: Box<SignatureValue>,
         literal: FunctionLiteralId,
@@ -69,8 +59,6 @@ enum FunctionValue {
     },
     Define {
         signature: Box<SignatureValue>,
-        signature_dependencies: Vec<(SignatureLiteralId, SignatureValue)>,
-        function_dependencies: Vec<(FunctionLiteralId, FunctionValue)>,
         context: Box<ContextValue>,
     },
     TakeFrom {
@@ -90,43 +78,8 @@ enum FunctionValue {
 }
 
 impl ContextValue {
-    fn substitute_signature(&mut self, id: SignatureId, value: &SignatureValue) {
-        for (_, other) in &mut self.given_signatures {
-            other.substitute_signature(id, value);
-        }
-        for (_, other) in &mut self.given_functions {
-            other.substitute_signature(id, value);
-        }
-    }
-
-    fn substitute_function(&mut self, id: FunctionId, value: &FunctionValue) {
-        for (_, other) in &mut self.given_signatures {
-            other.substitute_function(id, value);
-        }
-        for (_, other) in &mut self.given_functions {
-            other.substitute_function(id, value);
-        }
-    }
-
-    fn substitute_used_signature(&mut self, id: SignatureLiteralId, value: &SignatureValue) {
-        for (_, other) in &mut self.given_signatures {
-            other.substitute_used_signature(id, value);
-        }
-        for (_, other) in &mut self.given_functions {
-            other.substitute_used_signature(id, value);
-        }
-    }
-
-    fn substitute_used_function(&mut self, id: FunctionLiteralId, value: &FunctionValue) {
-        for (_, other) in &mut self.given_signatures {
-            other.substitute_used_function(id, value);
-        }
-        for (_, other) in &mut self.given_functions {
-            other.substitute_used_function(id, value);
-        }
-    }
-
     fn substitute_taken_signature(&mut self, id: SignatureLiteralId, value: &SignatureValue) {
+        self.taken_signatures.remove(self.taken_signatures.binary_search(&id).unwrap());
         for (_, other) in &mut self.given_signatures {
             other.substitute_taken_signature(id, value);
         }
@@ -136,6 +89,7 @@ impl ContextValue {
     }
 
     fn substitute_taken_function(&mut self, id: FunctionLiteralId, value: &FunctionValue) {
+        self.taken_functions.remove(self.taken_functions.binary_search(&id).unwrap());
         for (_, other) in &mut self.given_signatures {
             other.substitute_taken_function(id, value);
         }
@@ -146,194 +100,8 @@ impl ContextValue {
 }
 
 impl SignatureValue {
-    fn substitute_signature(&mut self, id: SignatureId, value: &SignatureValue) {
-        match self {
-            SignatureValue::Variable { signature } => {
-                if *signature == id {
-                    *self = value.clone();
-                }
-            }
-            SignatureValue::Use { literal } => {
-                _ = literal;
-            }
-            SignatureValue::Take { literal } => {
-                _ = literal;
-            }
-            SignatureValue::Conjure {
-                marker,
-                signature_dependencies,
-                function_dependencies,
-            } => {
-                _ = marker;
-                for dependency in signature_dependencies {
-                    dependency.substitute_signature(id, value);
-                }
-                for dependency in function_dependencies {
-                    dependency.substitute_signature(id, value);
-                }
-            }
-            SignatureValue::Define {
-                signature_dependencies,
-                function_dependencies,
-                context,
-            } => {
-                for (_, dependency) in signature_dependencies {
-                    dependency.substitute_signature(id, value);
-                }
-                for (_, dependency) in function_dependencies {
-                    dependency.substitute_signature(id, value);
-                }
-                context.substitute_signature(id, value);
-            }
-            SignatureValue::TakeFrom { literal, source } => {
-                _ = literal;
-                source.substitute_signature(id, value);
-            }
-        }
-    }
-
-    fn substitute_function(&mut self, id: FunctionId, value: &FunctionValue) {
-        match self {
-            SignatureValue::Variable { signature } => {
-                _ = signature;
-            }
-            SignatureValue::Use { literal } => {
-                _ = literal;
-            }
-            SignatureValue::Take { literal } => {
-                _ = literal;
-            }
-            SignatureValue::Conjure {
-                marker,
-                signature_dependencies,
-                function_dependencies,
-            } => {
-                _ = marker;
-                for dependency in signature_dependencies {
-                    dependency.substitute_function(id, value);
-                }
-                for dependency in function_dependencies {
-                    dependency.substitute_function(id, value);
-                }
-            }
-            SignatureValue::Define {
-                signature_dependencies,
-                function_dependencies,
-                context,
-            } => {
-                for (_, dependency) in signature_dependencies {
-                    dependency.substitute_function(id, value);
-                }
-                for (_, dependency) in function_dependencies {
-                    dependency.substitute_function(id, value);
-                }
-                context.substitute_function(id, value);
-            }
-            SignatureValue::TakeFrom { literal, source } => {
-                _ = literal;
-                source.substitute_function(id, value);
-            }
-        }
-    }
-
-    fn substitute_used_signature(&mut self, id: SignatureLiteralId, value: &SignatureValue) {
-        match self {
-            SignatureValue::Variable { signature } => {
-                _ = signature;
-            }
-            SignatureValue::Use { literal } => {
-                if *literal == id {
-                    *self = value.clone();
-                }
-            }
-            SignatureValue::Take { literal } => {
-                _ = literal;
-            }
-            SignatureValue::Conjure {
-                marker,
-                signature_dependencies,
-                function_dependencies,
-            } => {
-                _ = marker;
-                for dependency in signature_dependencies {
-                    dependency.substitute_used_signature(id, value);
-                }
-                for dependency in function_dependencies {
-                    dependency.substitute_used_signature(id, value);
-                }
-            }
-            SignatureValue::Define {
-                signature_dependencies,
-                function_dependencies,
-                context,
-            } => {
-                for (_, dependency) in signature_dependencies {
-                    dependency.substitute_used_signature(id, value);
-                }
-                for (_, dependency) in function_dependencies {
-                    dependency.substitute_used_signature(id, value);
-                }
-                context.substitute_used_signature(id, value);
-            }
-            SignatureValue::TakeFrom { literal, source } => {
-                _ = literal;
-                source.substitute_used_signature(id, value);
-            }
-        }
-    }
-
-    fn substitute_used_function(&mut self, id: FunctionLiteralId, value: &FunctionValue) {
-        match self {
-            SignatureValue::Variable { signature } => {
-                _ = signature;
-            }
-            SignatureValue::Use { literal } => {
-                _ = literal;
-            }
-            SignatureValue::Take { literal } => {
-                _ = literal;
-            }
-            SignatureValue::Conjure {
-                marker,
-                signature_dependencies,
-                function_dependencies,
-            } => {
-                _ = marker;
-                for dependency in signature_dependencies {
-                    dependency.substitute_used_function(id, value);
-                }
-                for dependency in function_dependencies {
-                    dependency.substitute_used_function(id, value);
-                }
-            }
-            SignatureValue::Define {
-                signature_dependencies,
-                function_dependencies,
-                context,
-            } => {
-                for (_, dependency) in signature_dependencies {
-                    dependency.substitute_used_function(id, value);
-                }
-                for (_, dependency) in function_dependencies {
-                    dependency.substitute_used_function(id, value);
-                }
-                context.substitute_used_function(id, value);
-            }
-            SignatureValue::TakeFrom { literal, source } => {
-                _ = literal;
-                source.substitute_used_function(id, value);
-            }
-        }
-    }
-
     fn substitute_taken_signature(&mut self, id: SignatureLiteralId, value: &SignatureValue) {
         match self {
-            SignatureValue::Variable { signature } => {
-                _ = signature;
-            }
-            SignatureValue::Use { literal } => {
-                _ = literal;
-            }
             SignatureValue::Take { literal } => {
                 if *literal == id {
                     *self = value.clone();
@@ -352,17 +120,7 @@ impl SignatureValue {
                     dependency.substitute_taken_signature(id, value);
                 }
             }
-            SignatureValue::Define {
-                signature_dependencies,
-                function_dependencies,
-                context,
-            } => {
-                for (_, dependency) in signature_dependencies {
-                    dependency.substitute_taken_signature(id, value);
-                }
-                for (_, dependency) in function_dependencies {
-                    dependency.substitute_taken_signature(id, value);
-                }
+            SignatureValue::Define { context } => {
                 context.substitute_taken_signature(id, value);
             }
             SignatureValue::TakeFrom { literal, source } => {
@@ -374,12 +132,6 @@ impl SignatureValue {
 
     fn substitute_taken_function(&mut self, id: FunctionLiteralId, value: &FunctionValue) {
         match self {
-            SignatureValue::Variable { signature } => {
-                _ = signature;
-            }
-            SignatureValue::Use { literal } => {
-                _ = literal;
-            }
             SignatureValue::Take { literal } => {
                 _ = literal;
             }
@@ -396,17 +148,7 @@ impl SignatureValue {
                     dependency.substitute_taken_function(id, value);
                 }
             }
-            SignatureValue::Define {
-                signature_dependencies,
-                function_dependencies,
-                context,
-            } => {
-                for (_, dependency) in signature_dependencies {
-                    dependency.substitute_taken_function(id, value);
-                }
-                for (_, dependency) in function_dependencies {
-                    dependency.substitute_taken_function(id, value);
-                }
+            SignatureValue::Define { context } => {
                 context.substitute_taken_function(id, value);
             }
             SignatureValue::TakeFrom { literal, source } => {
@@ -418,291 +160,8 @@ impl SignatureValue {
 }
 
 impl FunctionValue {
-    fn substitute_signature(&mut self, id: SignatureId, value: &SignatureValue) {
-        match self {
-            FunctionValue::Variable { function } => {
-                _ = function;
-            }
-            FunctionValue::Use { signature, literal } => {
-                signature.substitute_signature(id, value);
-                _ = literal;
-            }
-            FunctionValue::Take { signature, literal } => {
-                signature.substitute_signature(id, value);
-                _ = literal;
-            }
-            FunctionValue::Conjure {
-                marker,
-                signature,
-                signature_dependencies,
-                function_dependencies,
-            } => {
-                _ = marker;
-                signature.substitute_signature(id, value);
-                for dependency in signature_dependencies {
-                    dependency.substitute_signature(id, value);
-                }
-                for dependency in function_dependencies {
-                    dependency.substitute_signature(id, value);
-                }
-            }
-            FunctionValue::Define {
-                signature,
-                signature_dependencies,
-                function_dependencies,
-                context,
-            } => {
-                signature.substitute_signature(id, value);
-                for (_, dependency) in signature_dependencies {
-                    dependency.substitute_signature(id, value);
-                }
-                for (_, dependency) in function_dependencies {
-                    dependency.substitute_signature(id, value);
-                }
-                context.substitute_signature(id, value);
-            }
-            FunctionValue::TakeFrom { literal, source } => {
-                _ = literal;
-                source.substitute_signature(id, value);
-            }
-            FunctionValue::GiveSignatureTo {
-                signature,
-                literal,
-                source,
-            } => {
-                signature.substitute_signature(id, value);
-                _ = literal;
-                source.substitute_signature(id, value);
-            }
-            FunctionValue::GiveFunctionTo {
-                function,
-                literal,
-                source,
-            } => {
-                function.substitute_signature(id, value);
-                _ = literal;
-                source.substitute_signature(id, value);
-            }
-        }
-    }
-
-    fn substitute_function(&mut self, id: FunctionId, value: &FunctionValue) {
-        match self {
-            FunctionValue::Variable { function } => {
-                if *function == id {
-                    *self = value.clone();
-                }
-            }
-            FunctionValue::Use { signature, literal } => {
-                signature.substitute_function(id, value);
-                _ = literal;
-            }
-            FunctionValue::Take { signature, literal } => {
-                signature.substitute_function(id, value);
-                _ = literal;
-            }
-            FunctionValue::Conjure {
-                marker,
-                signature,
-                signature_dependencies,
-                function_dependencies,
-            } => {
-                _ = marker;
-                signature.substitute_function(id, value);
-                for dependency in signature_dependencies {
-                    dependency.substitute_function(id, value);
-                }
-                for dependency in function_dependencies {
-                    dependency.substitute_function(id, value);
-                }
-            }
-            FunctionValue::Define {
-                signature,
-                signature_dependencies,
-                function_dependencies,
-                context,
-            } => {
-                signature.substitute_function(id, value);
-                for (_, dependency) in signature_dependencies {
-                    dependency.substitute_function(id, value);
-                }
-                for (_, dependency) in function_dependencies {
-                    dependency.substitute_function(id, value);
-                }
-                context.substitute_function(id, value);
-            }
-            FunctionValue::TakeFrom { literal, source } => {
-                _ = literal;
-                source.substitute_function(id, value);
-            }
-            FunctionValue::GiveSignatureTo {
-                signature,
-                literal,
-                source,
-            } => {
-                signature.substitute_function(id, value);
-                _ = literal;
-                source.substitute_function(id, value);
-            }
-            FunctionValue::GiveFunctionTo {
-                function,
-                literal,
-                source,
-            } => {
-                function.substitute_function(id, value);
-                _ = literal;
-                source.substitute_function(id, value);
-            }
-        }
-    }
-
-    fn substitute_used_signature(&mut self, id: SignatureLiteralId, value: &SignatureValue) {
-        match self {
-            FunctionValue::Variable { function } => {
-                _ = function;
-            }
-            FunctionValue::Use { signature, literal } => {
-                signature.substitute_used_signature(id, value);
-                _ = literal;
-            }
-            FunctionValue::Take { signature, literal } => {
-                signature.substitute_used_signature(id, value);
-                _ = literal;
-            }
-            FunctionValue::Conjure {
-                marker,
-                signature,
-                signature_dependencies,
-                function_dependencies,
-            } => {
-                _ = marker;
-                signature.substitute_used_signature(id, value);
-                for dependency in signature_dependencies {
-                    dependency.substitute_used_signature(id, value);
-                }
-                for dependency in function_dependencies {
-                    dependency.substitute_used_signature(id, value);
-                }
-            }
-            FunctionValue::Define {
-                signature,
-                signature_dependencies,
-                function_dependencies,
-                context,
-            } => {
-                signature.substitute_used_signature(id, value);
-                for (_, dependency) in signature_dependencies {
-                    dependency.substitute_used_signature(id, value);
-                }
-                for (_, dependency) in function_dependencies {
-                    dependency.substitute_used_signature(id, value);
-                }
-                context.substitute_used_signature(id, value);
-            }
-            FunctionValue::TakeFrom { literal, source } => {
-                _ = literal;
-                source.substitute_used_signature(id, value);
-            }
-            FunctionValue::GiveSignatureTo {
-                signature,
-                literal,
-                source,
-            } => {
-                signature.substitute_used_signature(id, value);
-                _ = literal;
-                source.substitute_used_signature(id, value);
-            }
-            FunctionValue::GiveFunctionTo {
-                function,
-                literal,
-                source,
-            } => {
-                function.substitute_used_signature(id, value);
-                _ = literal;
-                source.substitute_used_signature(id, value);
-            }
-        }
-    }
-
-    fn substitute_used_function(&mut self, id: FunctionLiteralId, value: &FunctionValue) {
-        match self {
-            FunctionValue::Variable { function } => {
-                _ = function;
-            }
-            FunctionValue::Use { signature, literal } => {
-                signature.substitute_used_function(id, value);
-                if *literal == id {
-                    *self = value.clone();
-                }
-            }
-            FunctionValue::Take { signature, literal } => {
-                signature.substitute_used_function(id, value);
-                _ = literal;
-            }
-            FunctionValue::Conjure {
-                marker,
-                signature,
-                signature_dependencies,
-                function_dependencies,
-            } => {
-                _ = marker;
-                signature.substitute_used_function(id, value);
-                for dependency in signature_dependencies {
-                    dependency.substitute_used_function(id, value);
-                }
-                for dependency in function_dependencies {
-                    dependency.substitute_used_function(id, value);
-                }
-            }
-            FunctionValue::Define {
-                signature,
-                signature_dependencies,
-                function_dependencies,
-                context,
-            } => {
-                signature.substitute_used_function(id, value);
-                for (_, dependency) in signature_dependencies {
-                    dependency.substitute_used_function(id, value);
-                }
-                for (_, dependency) in function_dependencies {
-                    dependency.substitute_used_function(id, value);
-                }
-                context.substitute_used_function(id, value);
-            }
-            FunctionValue::TakeFrom { literal, source } => {
-                _ = literal;
-                source.substitute_used_function(id, value);
-            }
-            FunctionValue::GiveSignatureTo {
-                signature,
-                literal,
-                source,
-            } => {
-                signature.substitute_used_function(id, value);
-                _ = literal;
-                source.substitute_used_function(id, value);
-            }
-            FunctionValue::GiveFunctionTo {
-                function,
-                literal,
-                source,
-            } => {
-                function.substitute_used_function(id, value);
-                _ = literal;
-                source.substitute_used_function(id, value);
-            }
-        }
-    }
-
     fn substitute_taken_signature(&mut self, id: SignatureLiteralId, value: &SignatureValue) {
         match self {
-            FunctionValue::Variable { function } => {
-                _ = function;
-            }
-            FunctionValue::Use { signature, literal } => {
-                signature.substitute_taken_signature(id, value);
-                _ = literal;
-            }
             FunctionValue::Take { signature, literal } => {
                 signature.substitute_taken_signature(id, value);
                 _ = literal;
@@ -722,19 +181,8 @@ impl FunctionValue {
                     dependency.substitute_taken_signature(id, value);
                 }
             }
-            FunctionValue::Define {
-                signature,
-                signature_dependencies,
-                function_dependencies,
-                context,
-            } => {
+            FunctionValue::Define { signature, context } => {
                 signature.substitute_taken_signature(id, value);
-                for (_, dependency) in signature_dependencies {
-                    dependency.substitute_taken_signature(id, value);
-                }
-                for (_, dependency) in function_dependencies {
-                    dependency.substitute_taken_signature(id, value);
-                }
                 context.substitute_taken_signature(id, value);
             }
             FunctionValue::TakeFrom { literal, source } => {
@@ -764,13 +212,6 @@ impl FunctionValue {
 
     fn substitute_taken_function(&mut self, id: FunctionLiteralId, value: &FunctionValue) {
         match self {
-            FunctionValue::Variable { function } => {
-                _ = function;
-            }
-            FunctionValue::Use { signature, literal } => {
-                signature.substitute_taken_function(id, value);
-                _ = literal;
-            }
             FunctionValue::Take { signature, literal } => {
                 signature.substitute_taken_function(id, value);
                 if *literal == id {
@@ -792,19 +233,8 @@ impl FunctionValue {
                     dependency.substitute_taken_function(id, value);
                 }
             }
-            FunctionValue::Define {
-                signature,
-                signature_dependencies,
-                function_dependencies,
-                context,
-            } => {
+            FunctionValue::Define { signature, context } => {
                 signature.substitute_taken_function(id, value);
-                for (_, dependency) in signature_dependencies {
-                    dependency.substitute_taken_function(id, value);
-                }
-                for (_, dependency) in function_dependencies {
-                    dependency.substitute_taken_function(id, value);
-                }
                 context.substitute_taken_function(id, value);
             }
             FunctionValue::TakeFrom { literal, source } => {
@@ -855,13 +285,6 @@ impl SignatureValue {
         function_enumeration: &mut HashMap<FunctionId, u64>,
     ) {
         match self {
-            SignatureValue::Variable { .. } => {
-                // there shouldn't be not-substituted variables left during conjuration enumeration
-                unreachable!()
-            }
-            SignatureValue::Use { literal } => {
-                _ = literal;
-            }
             SignatureValue::Take { literal } => {
                 _ = literal;
             }
@@ -892,17 +315,7 @@ impl SignatureValue {
                     dependency.enumerate_conjurations(signature_enumeration, function_enumeration);
                 }
             }
-            SignatureValue::Define {
-                signature_dependencies,
-                function_dependencies,
-                context,
-            } => {
-                for (_, dependency) in signature_dependencies {
-                    dependency.enumerate_conjurations(signature_enumeration, function_enumeration);
-                }
-                for (_, dependency) in function_dependencies {
-                    dependency.enumerate_conjurations(signature_enumeration, function_enumeration);
-                }
+            SignatureValue::Define { context } => {
                 context.enumerate_conjurations(signature_enumeration, function_enumeration);
             }
             SignatureValue::TakeFrom { literal, source } => {
@@ -920,14 +333,6 @@ impl FunctionValue {
         function_enumeration: &mut HashMap<FunctionId, u64>,
     ) {
         match self {
-            FunctionValue::Variable { .. } => {
-                // there shouldn't be not-substituted variables left during conjuration enumeration
-                unreachable!();
-            }
-            FunctionValue::Use { signature, literal } => {
-                signature.enumerate_conjurations(signature_enumeration, function_enumeration);
-                _ = literal;
-            }
             FunctionValue::Take { signature, literal } => {
                 signature.enumerate_conjurations(signature_enumeration, function_enumeration);
                 _ = literal;
@@ -961,19 +366,8 @@ impl FunctionValue {
                     dependency.enumerate_conjurations(signature_enumeration, function_enumeration);
                 }
             }
-            FunctionValue::Define {
-                signature,
-                signature_dependencies,
-                function_dependencies,
-                context,
-            } => {
+            FunctionValue::Define { signature, context } => {
                 signature.enumerate_conjurations(signature_enumeration, function_enumeration);
-                for (_, dependency) in signature_dependencies {
-                    dependency.enumerate_conjurations(signature_enumeration, function_enumeration);
-                }
-                for (_, dependency) in function_dependencies {
-                    dependency.enumerate_conjurations(signature_enumeration, function_enumeration);
-                }
                 context.enumerate_conjurations(signature_enumeration, function_enumeration);
             }
             FunctionValue::TakeFrom { literal, source } => {
@@ -1016,12 +410,6 @@ impl ContextValue {
 impl SignatureValue {
     fn reduce(&mut self) {
         match self {
-            SignatureValue::Variable { .. } => {
-                unreachable!()
-            }
-            SignatureValue::Use { literal } => {
-                _ = literal;
-            }
             SignatureValue::Take { literal } => {
                 _ = literal;
             }
@@ -1038,35 +426,17 @@ impl SignatureValue {
                     dependency.reduce();
                 }
             }
-            SignatureValue::Define {
-                signature_dependencies,
-                function_dependencies,
-                context,
-            } => {
-                for (_, dependency) in signature_dependencies.iter_mut() {
-                    dependency.reduce();
-                }
-                for (_, dependency) in function_dependencies.iter_mut() {
-                    dependency.reduce();
-                }
-
-                for (id, value) in signature_dependencies.drain(..) {
-                    context.substitute_used_signature(id, &value);
-                }
-                for (id, value) in function_dependencies.drain(..) {
-                    context.substitute_used_function(id, &value);
-                }
-
+            SignatureValue::Define { context } => {
                 context.reduce();
             }
             SignatureValue::TakeFrom { literal, source } => {
                 _ = literal;
                 source.reduce();
 
+                println!("reducing SignatureValue::TakeFrom, source: {:#?}", source);
+
                 if let FunctionValue::Define {
                     signature: _,
-                    signature_dependencies: _,
-                    function_dependencies: _,
                     context,
                 } = &**source
                 {
@@ -1085,13 +455,6 @@ impl SignatureValue {
 impl FunctionValue {
     fn reduce(&mut self) {
         match self {
-            FunctionValue::Variable { .. } => {
-                unreachable!()
-            }
-            FunctionValue::Use { signature, literal } => {
-                signature.reduce();
-                _ = literal;
-            }
             FunctionValue::Take { signature, literal } => {
                 signature.reduce();
                 _ = literal;
@@ -1111,37 +474,18 @@ impl FunctionValue {
                     dependency.reduce();
                 }
             }
-            FunctionValue::Define {
-                signature,
-                signature_dependencies,
-                function_dependencies,
-                context,
-            } => {
+            FunctionValue::Define { signature, context } => {
                 signature.reduce();
-                for (_, dependency) in signature_dependencies.iter_mut() {
-                    dependency.reduce();
-                }
-                for (_, dependency) in function_dependencies.iter_mut() {
-                    dependency.reduce();
-                }
-
-                for (id, value) in signature_dependencies.drain(..) {
-                    context.substitute_used_signature(id, &value);
-                }
-                for (id, value) in function_dependencies.drain(..) {
-                    context.substitute_used_function(id, &value);
-                }
-
                 context.reduce();
             }
             FunctionValue::TakeFrom { literal, source } => {
                 _ = literal;
                 source.reduce();
 
+                println!("reducing FunctionValue::TakeFrom, source: {:#?}", source);
+
                 if let FunctionValue::Define {
                     signature: _,
-                    signature_dependencies: _,
-                    function_dependencies: _,
                     context,
                 } = &**source
                 {
@@ -1164,6 +508,8 @@ impl FunctionValue {
                 source.substitute_taken_signature(*literal, &**signature);
 
                 source.reduce();
+
+                *self = *source.clone();
             }
             FunctionValue::GiveFunctionTo {
                 function,
@@ -1176,314 +522,439 @@ impl FunctionValue {
                 source.substitute_taken_function(*literal, &**function);
 
                 source.reduce();
+
+                *self = *source.clone();
             }
         }
     }
 }
 
+struct Values {
+    context: HashMap<ContextId, ContextValue>,
+    signature: HashMap<SignatureId, SignatureValue>,
+    function: HashMap<FunctionId, FunctionValue>,
+}
+
 impl<'s> Model<'s> {
-    pub(crate) fn check(&self) {
-        let mut context_values: HashMap<ContextId, ContextValue> = HashMap::new();
+    fn check_context(&self, context: ContextId, values: &mut Values) {
+        let contents = &self.context_contents[&context];
 
-        for &context in &self.contexts {
-            let contents = &self.context_contents[&context];
+        let mut taken_signatures = contents
+            .statements
+            .iter()
+            .filter_map(|statement| {
+                if let Statement::SignatureAssignment {
+                    lhs: _,
+                    rhs: SignatureAssignmentRhs::Take { literal },
+                } = *statement
+                {
+                    Some(literal)
+                } else {
+                    None
+                }
+            })
+            .collect_vec();
+        taken_signatures.sort();
 
-            println!("{contents:#?}");
-
-            let mut taken_signatures = contents
-                .statements
-                .iter()
-                .filter_map(|statement| {
-                    if let Statement::SignatureAssignment {
-                        lhs: _,
-                        rhs: SignatureAssignmentRhs::Take { literal },
-                    } = *statement
-                    {
-                        Some(literal)
-                    } else {
-                        None
-                    }
-                })
-                .collect_vec();
-            taken_signatures.sort();
-            let mut taken_functions = contents
-                .statements
-                .iter()
-                .filter_map(|statement| {
-                    if let Statement::FunctionAssignment {
-                        lhs: _,
-                        rhs:
+        let mut taken_functions = contents
+            .statements
+            .iter()
+            .filter_map(|statement| {
+                if let Statement::FunctionAssignment {
+                    lhs: _,
+                    rhs:
                         FunctionAssignmentRhs::Take {
                             signature: _,
                             literal,
                         },
-                    } = *statement
-                    {
-                        Some(literal)
-                    } else {
-                        None
-                    }
-                })
-                .collect_vec();
-            taken_functions.sort();
+                } = *statement
+                {
+                    Some(literal)
+                } else {
+                    None
+                }
+            })
+            .collect_vec();
+        taken_functions.sort();
 
-            dbg!(&taken_signatures);
-            dbg!(&taken_functions);
+        let mut given_signatures = contents
+            .statements
+            .iter()
+            .filter_map(|statement| {
+                if let Statement::GiveSignature { signature, literal } = *statement {
+                    Some((literal, signature))
+                } else {
+                    None
+                }
+            })
+            .collect_vec();
+        given_signatures.sort();
 
-            let mut given_signatures = contents
-                .statements
-                .iter()
-                .filter_map(|statement| {
-                    if let Statement::GiveSignature { signature, literal } = *statement {
-                        Some((literal, signature))
-                    } else {
-                        None
-                    }
-                })
-                .collect_vec();
-            given_signatures.sort();
-            let mut given_functions = contents
-                .statements
-                .iter()
-                .filter_map(|statement| {
-                    if let Statement::GiveFunction { function, literal } = *statement {
-                        Some((literal, function))
-                    } else {
-                        None
-                    }
-                })
-                .collect_vec();
-            given_functions.sort();
+        let mut given_functions = contents
+            .statements
+            .iter()
+            .filter_map(|statement| {
+                if let Statement::GiveFunction { function, literal } = *statement {
+                    Some((literal, function))
+                } else {
+                    None
+                }
+            })
+            .collect_vec();
+        given_functions.sort();
 
-            dbg!(&given_signatures);
-            dbg!(&given_functions);
-
-            let mut signature_values: HashMap<SignatureId, SignatureValue> = contents
-                .statements
-                .iter()
-                .filter_map(|statement| {
-                    if let Statement::SignatureAssignment { lhs, ref rhs } = *statement {
-                        let value = match *rhs {
-                            SignatureAssignmentRhs::Use { literal } => SignatureValue::Use { literal },
-                            SignatureAssignmentRhs::Take { literal } => {
-                                SignatureValue::Take { literal }
+        for statement in &contents.statements {
+            match *statement {
+                Statement::SignatureAssignment { lhs, ref rhs } => {
+                    let mut value = match *rhs {
+                        SignatureAssignmentRhs::Take { literal } => {
+                            SignatureValue::Take { literal }
+                        }
+                        SignatureAssignmentRhs::Conjure {
+                            ref signature_dependencies,
+                            ref function_dependencies,
+                        } => SignatureValue::Conjure {
+                            marker: ConjureSignatureMarker::Id(lhs),
+                            signature_dependencies: signature_dependencies
+                                .iter()
+                                .map(|&signature| values.signature[&signature].clone())
+                                .collect(),
+                            function_dependencies: function_dependencies
+                                .iter()
+                                .map(|&function| values.function[&function].clone())
+                                .collect(),
+                        },
+                        SignatureAssignmentRhs::Define { context } => {
+                            self.check_context(context, values);
+                            SignatureValue::Define {
+                                context: Box::new(values.context[&context].clone()),
                             }
-                            SignatureAssignmentRhs::Conjure {
-                                ref signature_dependencies,
-                                ref function_dependencies,
-                            } => SignatureValue::Conjure {
-                                marker: ConjureSignatureMarker::Id(lhs),
-                                signature_dependencies: signature_dependencies
-                                    .iter()
-                                    .map(|&signature| SignatureValue::Variable { signature })
-                                    .collect(),
-                                function_dependencies: function_dependencies
-                                    .iter()
-                                    .map(|&function| FunctionValue::Variable { function })
-                                    .collect(),
-                            },
-                            SignatureAssignmentRhs::Define {
-                                ref signature_dependencies,
-                                ref function_dependencies,
-                                context,
-                            } => SignatureValue::Define {
-                                signature_dependencies: signature_dependencies
-                                    .iter()
-                                    .map(|dependency| {
-                                        (
-                                            dependency.literal,
-                                            SignatureValue::Variable {
-                                                signature: dependency.signature,
-                                            },
-                                        )
-                                    })
-                                    .collect(),
-                                function_dependencies: function_dependencies
-                                    .iter()
-                                    .map(|dependency| {
-                                        (
-                                            dependency.literal,
-                                            FunctionValue::Variable {
-                                                function: dependency.function,
-                                            },
-                                        )
-                                    })
-                                    .collect(),
-                                context: Box::new(context_values[&context].clone()),
-                            },
-                            SignatureAssignmentRhs::TakeFrom { literal, source } => {
-                                SignatureValue::TakeFrom {
-                                    literal,
-                                    source: Box::new(FunctionValue::Variable { function: source }),
-                                }
+                        }
+                        SignatureAssignmentRhs::TakeFrom { literal, source } => {
+                            SignatureValue::TakeFrom {
+                                literal,
+                                source: Box::new(values.function[&source].clone()),
                             }
-                        };
-                        Some((lhs, value))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
-            let mut function_values: HashMap<FunctionId, FunctionValue> = contents
-                .statements
-                .iter()
-                .filter_map(|statement| {
-                    if let Statement::FunctionAssignment { lhs, ref rhs } = *statement {
-                        let value = match *rhs {
-                            FunctionAssignmentRhs::Use { signature, literal } => FunctionValue::Use {
-                                signature: Box::new(SignatureValue::Variable { signature }),
-                                literal,
-                            },
-                            FunctionAssignmentRhs::Take { signature, literal } => FunctionValue::Take {
-                                signature: Box::new(SignatureValue::Variable { signature }),
-                                literal,
-                            },
-                            FunctionAssignmentRhs::Conjure {
-                                signature,
-                                ref signature_dependencies,
-                                ref function_dependencies,
-                            } => FunctionValue::Conjure {
-                                signature: Box::new(SignatureValue::Variable { signature }),
-                                marker: ConjureFunctionMarker::Id(lhs),
-                                signature_dependencies: signature_dependencies
-                                    .iter()
-                                    .map(|&signature| SignatureValue::Variable { signature })
-                                    .collect(),
-                                function_dependencies: function_dependencies
-                                    .iter()
-                                    .map(|&function| FunctionValue::Variable { function })
-                                    .collect(),
-                            },
-                            FunctionAssignmentRhs::Define {
-                                signature,
-                                ref signature_dependencies,
-                                ref function_dependencies,
-                                context,
-                            } => FunctionValue::Define {
-                                signature: Box::new(SignatureValue::Variable { signature }),
-                                signature_dependencies: signature_dependencies
-                                    .iter()
-                                    .map(|dependency| {
-                                        (
-                                            dependency.literal,
-                                            SignatureValue::Variable {
-                                                signature: dependency.signature,
-                                            },
-                                        )
-                                    })
-                                    .collect(),
-                                function_dependencies: function_dependencies
-                                    .iter()
-                                    .map(|dependency| {
-                                        (
-                                            dependency.literal,
-                                            FunctionValue::Variable {
-                                                function: dependency.function,
-                                            },
-                                        )
-                                    })
-                                    .collect(),
-                                context: Box::new(context_values[&context].clone()),
-                            },
-                            FunctionAssignmentRhs::TakeFrom { literal, source } => {
-                                FunctionValue::TakeFrom {
-                                    literal,
-                                    source: Box::new(FunctionValue::Variable { function: source }),
-                                }
+                        }
+                    };
+                    value.reduce();
+                    values.signature.insert(lhs, value);
+                }
+                Statement::FunctionAssignment { lhs, ref rhs } => {
+                    let mut value = match *rhs {
+                        FunctionAssignmentRhs::Take { signature, literal } => FunctionValue::Take {
+                            signature: Box::new(values.signature[&signature].clone()),
+                            literal,
+                        },
+                        FunctionAssignmentRhs::Conjure {
+                            signature,
+                            ref signature_dependencies,
+                            ref function_dependencies,
+                        } => FunctionValue::Conjure {
+                            signature: Box::new(values.signature[&signature].clone()),
+                            marker: ConjureFunctionMarker::Id(lhs),
+                            signature_dependencies: signature_dependencies
+                                .iter()
+                                .map(|&signature| values.signature[&signature].clone())
+                                .collect(),
+                            function_dependencies: function_dependencies
+                                .iter()
+                                .map(|&function| values.function[&function].clone())
+                                .collect(),
+                        },
+                        FunctionAssignmentRhs::Define { signature, context } => {
+                            self.check_context(context, values);
+                            FunctionValue::Define {
+                                signature: Box::new(values.signature[&signature].clone()),
+                                context: Box::new(values.context[&context].clone()),
                             }
-                            FunctionAssignmentRhs::GiveSignatureTo {
-                                signature,
+                        }
+                        FunctionAssignmentRhs::TakeFrom { literal, source } => {
+                            FunctionValue::TakeFrom {
                                 literal,
-                                source,
-                            } => FunctionValue::GiveSignatureTo {
-                                signature: Box::new(SignatureValue::Variable { signature }),
-                                literal,
-                                source: Box::new(FunctionValue::Variable { function: source }),
-                            },
-                            FunctionAssignmentRhs::GiveFunctionTo {
-                                function,
-                                literal,
-                                source,
-                            } => FunctionValue::GiveFunctionTo {
-                                function: Box::new(FunctionValue::Variable { function }),
-                                literal,
-                                source: Box::new(FunctionValue::Variable { function: source }),
-                            },
-                        };
-                        Some((lhs, value))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
-            dbg!(&signature_values);
-            dbg!(&function_values);
-
-            for id in signature_values.keys().copied().collect_vec() {
-                let value = signature_values[&id].clone();
-                for other in signature_values.values_mut() {
-                    other.substitute_signature(id, &value);
+                                source: Box::new(values.function[&source].clone()),
+                            }
+                        }
+                        FunctionAssignmentRhs::GiveSignatureTo {
+                            signature,
+                            literal,
+                            source,
+                        } => FunctionValue::GiveSignatureTo {
+                            signature: Box::new(values.signature[&signature].clone()),
+                            literal,
+                            source: Box::new(values.function[&source].clone()),
+                        },
+                        FunctionAssignmentRhs::GiveFunctionTo {
+                            function,
+                            literal,
+                            source,
+                        } => FunctionValue::GiveFunctionTo {
+                            function: Box::new(values.function[&function].clone()),
+                            literal,
+                            source: Box::new(values.function[&source].clone()),
+                        },
+                    };
+                    value.reduce();
+                    values.function.insert(lhs, value);
                 }
-                for other in function_values.values_mut() {
-                    other.substitute_signature(id, &value);
-                }
+                _ => {}
             }
-            for id in function_values.keys().copied().collect_vec() {
-                let value = function_values[&id].clone();
-                for other in signature_values.values_mut() {
-                    other.substitute_function(id, &value);
-                }
-                for other in function_values.values_mut() {
-                    other.substitute_function(id, &value);
-                }
-            }
-
-            dbg!(&signature_values);
-            dbg!(&function_values);
-
-            for &(_literal, signature) in &given_signatures {
-                let value = signature_values.get_mut(&signature).unwrap();
-                value.reduce();
-            }
-            for &(_literal, function) in &given_functions {
-                let value = function_values.get_mut(&function).unwrap();
-                value.reduce();
-            }
-
-            dbg!(&signature_values);
-            dbg!(&function_values);
-
-            /*let mut signature_enumeration = HashMap::new();
-            let mut function_enumeration = HashMap::new();
-            for &(_literal, signature) in &given_signatures {
-                let value = signature_values.get_mut(&signature).unwrap();
-                value.enumerate_conjurations(&mut signature_enumeration, &mut function_enumeration);
-            }
-            for &(_literal, function) in &given_functions {
-                let value = function_values.get_mut(&function).unwrap();
-                value.enumerate_conjurations(&mut signature_enumeration, &mut function_enumeration);
-            }*/
-
-            context_values.insert(context, ContextValue {
-                taken_signatures,
-                taken_functions,
-                given_signatures: given_signatures.into_iter().map(|(literal, signature)|
-                    (literal, signature_values.remove(&signature).unwrap())
-                ).collect(),
-                given_functions: given_functions.into_iter().map(|(literal, function)|
-                    (literal, function_values.remove(&function).unwrap())
-                ).collect(),
-            });
-
-            println!("\n=====\n=====\n=====\n");
-
-            // Four stages:
-            // 0. rewrite assignments as values
-            // 1. substitute assignments
-            // 2. reduce definitions, take-from's and give-to's
-            // 3. enumerate conjurations
         }
+
+        /*let mut signature_enumeration = HashMap::new();
+        let mut function_enumeration = HashMap::new();
+        for &(_literal, signature) in &given_signatures {
+            let value = signature_values.get_mut(&signature).unwrap();
+            value.enumerate_conjurations(&mut signature_enumeration, &mut function_enumeration);
+        }
+        for &(_literal, function) in &given_functions {
+            let value = function_values.get_mut(&function).unwrap();
+            value.enumerate_conjurations(&mut signature_enumeration, &mut function_enumeration);
+        }*/
+
+        let context_value = ContextValue {
+            taken_signatures,
+            taken_functions,
+            given_signatures: given_signatures
+                .into_iter()
+                .map(|(literal, signature)| {
+                    (literal, values.signature.get(&signature).unwrap().clone())
+                })
+                .collect(),
+            given_functions: given_functions
+                .into_iter()
+                .map(|(literal, function)| {
+                    (literal, values.function.get(&function).unwrap().clone())
+                })
+                .collect(),
+        };
+
+        values.context.insert(context, context_value);
+    }
+
+    pub(crate) fn check(&self) {
+        let mut values = Values {
+            context: Default::default(),
+            signature: Default::default(),
+            function: Default::default(),
+        };
+        self.check_context(self.global_context, &mut values);
+
+        let context_value = &values.context[&self.global_context];
+        println!("{:#?}", fmt::from_fn(|fmt| self.debug_context_value(fmt, context_value)));
+    }
+
+    fn debug_signature_literal(
+        &self,
+        fmt: &mut Formatter,
+        literal: SignatureLiteralId,
+    ) -> fmt::Result {
+        let name = self.signature_literal_names[&literal];
+        write!(fmt, "'({name})'")
+    }
+
+    fn debug_function_literal(
+        &self,
+        fmt: &mut Formatter,
+        literal: FunctionLiteralId,
+    ) -> fmt::Result {
+        let name = self.function_literal_names[&literal];
+        write!(fmt, "'{name}'")
+    }
+
+    fn debug_signature(&self, fmt: &mut Formatter, signature: SignatureId) -> fmt::Result {
+        let name = self.signature_names[&signature];
+        write!(fmt, "({name})")
+    }
+
+    fn debug_function(&self, fmt: &mut Formatter, function: FunctionId) -> fmt::Result {
+        let name = self.function_names[&function];
+        write!(fmt, "{name}")
+    }
+
+    fn debug_conjure_signature_marker(
+        &self,
+        fmt: &mut Formatter,
+        marker: ConjureSignatureMarker,
+    ) -> fmt::Result {
+        match marker {
+            ConjureSignatureMarker::Id(id) => {
+                write!(fmt, "Marker::Id(")?;
+                self.debug_signature(fmt, id)?;
+                write!(fmt, ")")
+            }
+            ConjureSignatureMarker::Index(index) => {
+                write!(fmt, "Marker::Index({index})")
+            }
+        }
+    }
+
+    fn debug_conjure_function_marker(
+        &self,
+        fmt: &mut Formatter,
+        marker: ConjureFunctionMarker,
+    ) -> fmt::Result {
+        match marker {
+            ConjureFunctionMarker::Id(id) => {
+                write!(fmt, "Marker::Id(")?;
+                self.debug_function(fmt, id)?;
+                write!(fmt, ")")
+            }
+            ConjureFunctionMarker::Index(index) => {
+                write!(fmt, "Marker::Index({index})")
+            }
+        }
+    }
+
+    fn debug_signature_value(&self, fmt: &mut Formatter, value: &SignatureValue) -> fmt::Result {
+        match *value {
+            SignatureValue::Take { literal } => fmt
+                .debug_struct("TakeSignature")
+                .field_with("literal", |fmt| self.debug_signature_literal(fmt, literal))
+                .finish(),
+            SignatureValue::Conjure {
+                marker,
+                ref signature_dependencies,
+                ref function_dependencies,
+            } => fmt
+                .debug_struct("ConjureSignature")
+                .field_with("marker", |fmt| {
+                    self.debug_conjure_signature_marker(fmt, marker)
+                })
+                .field_with("signature_dependencies", |fmt| {
+                    let mut fmt = fmt.debug_list();
+                    for value in signature_dependencies {
+                        fmt.entry_with(|fmt| self.debug_signature_value(fmt, value));
+                    }
+                    fmt.finish()
+                })
+                .field_with("function_dependencies", |fmt| {
+                    let mut fmt = fmt.debug_list();
+                    for value in function_dependencies {
+                        fmt.entry_with(|fmt| self.debug_function_value(fmt, value));
+                    }
+                    fmt.finish()
+                })
+                .finish(),
+            SignatureValue::Define { ref context } => fmt
+                .debug_struct("DefineSignature")
+                .field_with("context", |fmt| self.debug_context_value(fmt, &**context))
+                .finish(),
+            SignatureValue::TakeFrom {
+                literal,
+                ref source,
+            } => fmt
+                .debug_struct("TakeSignatureFrom")
+                .field_with("literal", |fmt| self.debug_signature_literal(fmt, literal))
+                .field_with("source", |fmt| self.debug_function_value(fmt, &**source))
+                .finish(),
+        }
+    }
+
+    fn debug_function_value(&self, fmt: &mut Formatter, value: &FunctionValue) -> fmt::Result {
+        match *value {
+            FunctionValue::Take {
+                ref signature,
+                literal,
+            } => fmt
+                .debug_struct("TakeFunction")
+                .field_with("signature", |fmt| self.debug_signature_value(fmt, &*signature))
+                .field_with("literal", |fmt| self.debug_function_literal(fmt, literal))
+                .finish(),
+            FunctionValue::Conjure {
+                marker,
+                ref signature,
+                ref signature_dependencies,
+                ref function_dependencies,
+            } => fmt
+                .debug_struct("ConjureFunction")
+                .field_with("marker", |fmt| {
+                    self.debug_conjure_function_marker(fmt, marker)
+                })
+                .field_with("signature", |fmt| self.debug_signature_value(fmt, &*signature))
+                .field_with("signature_dependencies", |fmt| {
+                    let mut fmt = fmt.debug_list();
+                    for value in signature_dependencies {
+                        fmt.entry_with(|fmt| self.debug_signature_value(fmt, value));
+                    }
+                    fmt.finish()
+                })
+                .field_with("function_dependencies", |fmt| {
+                    let mut fmt = fmt.debug_list();
+                    for value in function_dependencies {
+                        fmt.entry_with(|fmt| self.debug_function_value(fmt, value));
+                    }
+                    fmt.finish()
+                })
+                .finish(),
+            FunctionValue::Define { ref signature, ref context } => fmt
+                .debug_struct("DefineFunction")
+                .field_with("signature", |fmt| self.debug_signature_value(fmt, &*signature))
+                .field_with("context", |fmt| self.debug_context_value(fmt, &**context))
+                .finish(),
+            FunctionValue::TakeFrom {
+                literal,
+                ref source,
+            } => fmt
+                .debug_struct("TakeFunctionFrom")
+                .field_with("literal", |fmt| self.debug_function_literal(fmt, literal))
+                .field_with("source", |fmt| self.debug_function_value(fmt, &**source))
+                .finish(),
+            FunctionValue::GiveSignatureTo {
+                ref signature,
+                literal,
+                ref source,
+            } => fmt
+                .debug_struct("GiveSignatureTo")
+                .field_with("signature", |fmt| self.debug_signature_value(fmt, &**signature))
+                .field_with("literal", |fmt| self.debug_signature_literal(fmt, literal))
+                .field_with("source", |fmt| self.debug_function_value(fmt, &**source))
+                .finish(),
+            FunctionValue::GiveFunctionTo {
+                ref function,
+                literal,
+                ref source,
+            } => fmt
+                .debug_struct("GiveFunctionTo")
+                .field_with("function", |fmt| self.debug_function_value(fmt, &**function))
+                .field_with("literal", |fmt| self.debug_function_literal(fmt, literal))
+                .field_with("source", |fmt| self.debug_function_value(fmt, &**source))
+                .finish(),
+        }
+    }
+
+    fn debug_context_value(&self, fmt: &mut Formatter, value: &ContextValue) -> fmt::Result {
+        fmt.debug_struct("ContextValue")
+            .field_with("taken_signatures", |fmt| {
+                let mut fmt = fmt.debug_list();
+                for &literal in &value.taken_signatures {
+                    fmt.entry_with(|fmt| self.debug_signature_literal(fmt, literal));
+                }
+                fmt.finish()
+            })
+            .field_with("taken_functions", |fmt| {
+                let mut fmt = fmt.debug_list();
+                for &literal in &value.taken_functions {
+                    fmt.entry_with(|fmt| self.debug_function_literal(fmt, literal));
+                }
+                fmt.finish()
+            })
+            .field_with("given_signatures", |fmt| {
+                let mut fmt = fmt.debug_map();
+                for &(literal, ref value) in &value.given_signatures {
+                    fmt.key_with(|fmt| self.debug_signature_literal(fmt, literal));
+                    fmt.value_with(|fmt| self.debug_signature_value(fmt, value));
+                }
+                fmt.finish()
+            })
+            .field_with("given_functions", |fmt| {
+                let mut fmt = fmt.debug_map();
+                for &(literal, ref value) in &value.given_functions {
+                    fmt.key_with(|fmt| self.debug_function_literal(fmt, literal));
+                    fmt.value_with(|fmt| self.debug_function_value(fmt, value));
+                }
+                fmt.finish()
+            })
+            .finish()
     }
 }

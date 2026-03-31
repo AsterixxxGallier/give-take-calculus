@@ -7,25 +7,19 @@ function_literal  = { "\'" ~ symbol ~ "\'" }
 
 conjure_dependency          = _{ signature | function }
 conjure_dependencies        =  { (" using" ~ (" " ~ conjure_dependency)+)? }
-signature_define_dependency =  { signature ~ " as " ~ signature_literal }
-function_define_dependency  =  { function ~ " as " ~ function_literal }
-define_dependency           = _{ signature_define_dependency | function_define_dependency }
-define_dependencies         =  { (" with " ~ define_dependency ~ (" and " ~ define_dependency)*)? }
 
 signature_assignment     =  { signature ~ " = " ~ signature_assignment_rhs }
-signature_assignment_rhs = _{ use_signature | take_signature_from | take_signature | conjure_signature | define_signature }
-use_signature            =  { "use " ~ signature_literal }
+signature_assignment_rhs = _{ take_signature_from | take_signature | conjure_signature | define_signature }
 take_signature           =  { "take " ~ signature_literal }
 conjure_signature        =  { "conjure" ~ conjure_dependencies }
-define_signature         =  { "define" ~ define_dependencies ~ context }
+define_signature         =  { "define" ~ context }
 take_signature_from      =  { "take " ~ signature_literal ~ " from " ~ function }
 
 function_assignment     =  { function ~ " = " ~ function_assignment_rhs }
-function_assignment_rhs = _{ use_function | take_function_from | give_signature_to | give_function_to | take_function | conjure_function | define_function }
-use_function            =  { "use " ~ signature ~ " " ~ function_literal }
+function_assignment_rhs = _{ take_function_from | give_signature_to | give_function_to | take_function | conjure_function | define_function }
 take_function           =  { "take " ~ signature ~ " " ~ function_literal }
 conjure_function        =  { "conjure " ~ signature ~ conjure_dependencies }
-define_function         =  { "define " ~ signature ~ define_dependencies ~ context }
+define_function         =  { "define " ~ signature ~ context }
 take_function_from      =  { "take " ~ function_literal ~ " from " ~ function }
 give_signature_to       =  { "give " ~ signature ~ " as " ~ signature_literal ~ " to " ~ function }
 give_function_to        =  { "give " ~ function ~ " as " ~ function_literal ~ " to " ~ function }

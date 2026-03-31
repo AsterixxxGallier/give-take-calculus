@@ -1,3 +1,5 @@
+#![feature(debug_closure_helpers)]
+
 use crate::model::Model;
 
 mod parse;

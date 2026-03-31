@@ -1,9 +1,7 @@
 (implies) = define
   (p) = take '(p)'
   (q) = take '(q)'
-  (p_q) = define with (p) as '(p)' and (q) as '(q)'
-    (p) = use '(p)'
-    (q) = use '(q)'
+  (p_q) = define
     p = take (p) 'p'
     q = conjure (q) using p
     give q as 'q'
@@ -12,17 +10,13 @@
 implies = define (implies)
   (p) = take '(p)'
   (q) = take '(q)'
-  (p_q) = define with (p) as '(p)' and (q) as '(q)'
-    (p) = use '(p)'
-    (q) = use '(q)'
+  (p_q) = define
     p = take (p) 'p'
     q = conjure (q) using p
     give q as 'q'
   give (p_q) as '(p_q)'
 
-(iff) = define with (implies) as '(implies)' and implies as 'implies'
-  (implies) = use '(implies)'
-  implies = use (implies) 'implies'
+(iff) = define
   (p) = take '(p)'
   (q) = take '(q)'
   p_implies = give (p) as '(p)' to implies
@@ -31,9 +25,7 @@ implies = define (implies)
   q_implies = give (q) as '(p)' to implies
   q_implies_p = give (p) as '(q)' to q_implies
   (q_p) = take '(p_q)' from q_implies_p
-  (p_iff_q) = define with (p_q) as '(p_q)' and (q_p) as '(q_p)'
-    (p_q) = use '(p_q)'
-    (q_p) = use '(q_p)'
+  (p_iff_q) = define
     p_q = conjure (p_q)
     q_p = conjure (q_p)
     give p_q as 'p_q'
@@ -45,24 +37,20 @@ implies = define (implies)
   p = conjure (p)
   give p as 'p'
 
-(not) = define with (false) as '(false)'
-  (false) = use '(false)'
+(not) = define
   (p) = take '(p)'
-  (not_p) = define with (false) as '(false)' and (p) as '(p)'
-    (false) = use '(false)'
-    (p) = use '(p)'
+  (not_p) = define
     p = take (p) 'p'
     false = conjure (false) using p
     give false as 'false'
   give (not_p) as '(not_p)'
 
-not = define (not) with (false) as '(false)'
-  (false) = use '(false)'
+not = define (not)
   (p) = take '(p)'
-  (not_p) = define with (false) as '(false)' and (p) as '(p)'
-    (false) = use '(false)'
-    (p) = use '(p)'
+  (not_p) = define
     p = take (p) 'p'
     false = conjure (false) using p
     give false as 'false'
   give (not_p) as '(not_p)'
+
+give (iff) as '(iff)'
