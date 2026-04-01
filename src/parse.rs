@@ -93,7 +93,6 @@ pub(crate) struct ConjureFunction<'s> {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct DefineFunction<'s> {
-    pub(crate) signature: Signature<'s>,
     pub(crate) context: Context<'s>,
 }
 
@@ -258,9 +257,8 @@ fn parse_conjure_function(pair: Pair<Rule>) -> ConjureFunction {
 }
 
 fn parse_define_function(pair: Pair<Rule>) -> DefineFunction {
-    let (signature, context) = pair.into_inner().collect_tuple().unwrap();
+    let (context, ) = pair.into_inner().collect_tuple().unwrap();
     DefineFunction {
-        signature: parse_signature(signature),
         context: parse_context(context),
     }
 }

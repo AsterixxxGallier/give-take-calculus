@@ -67,7 +67,6 @@ enum FunctionValue {
         function_dependencies: Vec<FunctionValue>,
     },
     Define {
-        signature: Box<SignatureValue>,
         context: Box<ContextValue>,
     },
     TakeFrom {
@@ -230,8 +229,7 @@ impl FunctionValue {
                     dependency.substitute_taken_signature(id, value);
                 }
             }
-            FunctionValue::Define { signature, context } => {
-                signature.substitute_taken_signature(id, value);
+            FunctionValue::Define { context } => {
                 context.substitute_taken_signature(id, value);
             }
             FunctionValue::TakeFrom { literal, source } => {
@@ -282,8 +280,7 @@ impl FunctionValue {
                     dependency.substitute_taken_function(id, value);
                 }
             }
-            FunctionValue::Define { signature, context } => {
-                signature.substitute_taken_function(id, value);
+            FunctionValue::Define { context } => {
                 context.substitute_taken_function(id, value);
             }
             FunctionValue::TakeFrom { literal, source } => {
@@ -433,8 +430,7 @@ impl FunctionValue {
                     dependency.enumerate_conjurations(signature_enumeration, function_enumeration);
                 }
             }
-            FunctionValue::Define { signature, context } => {
-                signature.enumerate_conjurations(signature_enumeration, function_enumeration);
+            FunctionValue::Define { context } => {
                 context.enumerate_conjurations(signature_enumeration, function_enumeration);
             }
             FunctionValue::TakeFrom { literal, source } => {
@@ -503,7 +499,6 @@ impl SignatureValue {
                 println!("reducing SignatureValue::TakeFrom, source: {:#?}", source);
 
                 if let FunctionValue::Define {
-                    signature: _,
                     context,
                 } = &**source
                 {
@@ -578,8 +573,7 @@ impl FunctionValue {
                     dependency.reduce();
                 }
             }
-            FunctionValue::Define { signature, context } => {
-                signature.reduce();
+            FunctionValue::Define { context } => {
                 context.reduce();
             }
             FunctionValue::TakeFrom { literal, source } => {
@@ -589,7 +583,6 @@ impl FunctionValue {
                 println!("reducing FunctionValue::TakeFrom, source: {:#?}", source);
 
                 if let FunctionValue::Define {
-                    signature: _,
                     context,
                 } = &**source
                 {
@@ -611,7 +604,6 @@ impl FunctionValue {
                 _ = literal;
 
                 if let FunctionValue::Define {
-                    signature: _,
                     context,
                 } = &mut **source
                 {
@@ -630,7 +622,6 @@ impl FunctionValue {
                 _ = literal;
 
                 if let FunctionValue::Define {
-                    signature: _,
                     context,
                 } = &mut **source
                 {
@@ -795,10 +786,9 @@ impl<'s> Model<'s> {
                                 .map(|&function| values.function[&function].clone())
                                 .collect(),
                         },
-                        FunctionAssignmentRhs::Define { signature, context } => {
+                        FunctionAssignmentRhs::Define { context } => {
                             self.check_context(context, values);
                             FunctionValue::Define {
-                                signature: Box::new(values.signature[&signature].clone()),
                                 context: Box::new(values.context[&context].clone()),
                             }
                         }
@@ -1040,9 +1030,8 @@ impl<'s> Model<'s> {
                     fmt.finish()
                 })
                 .finish(),
-            FunctionValue::Define { ref signature, ref context } => fmt
+            FunctionValue::Define { ref context } => fmt
                 .debug_struct("DefineFunction")
-                .field_with("signature", |fmt| self.debug_signature_value(fmt, &*signature))
                 .field_with("context", |fmt| self.debug_context_value(fmt, &**context))
                 .finish(),
             FunctionValue::TakeFrom {

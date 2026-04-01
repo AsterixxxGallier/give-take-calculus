@@ -28,7 +28,7 @@
   false = conjure (false) using p
   give false as 'false'
 
-(not_apply) = define
+not_apply = define
   (p) = take '(p)'
   (not_p) = give (p) as '(p)' to (not)
   not_p = take (not_p) 'not_p'
@@ -38,4 +38,4 @@
   give false as 'false'
 
 give (iff) as '(iff)'
-give (not_apply) as '(not_apply)'
+give not_apply as 'not_apply'

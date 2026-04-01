@@ -71,7 +71,6 @@ pub(crate) enum FunctionAssignmentRhs {
         function_dependencies: Vec<FunctionId>,
     },
     Define {
-        signature: SignatureId,
         context: ContextId,
     },
     TakeFrom {
@@ -403,15 +402,11 @@ impl<'s> Model<'s> {
                             }
                         }
                         parse::FunctionAssignmentRhs::Define(define_function) => {
-                            let signature = self
-                                .deep_resolver(path)
-                                .resolve_signature_unwrap(define_function.signature.0);
                             let define_context = ContextId::generate();
                             self.context_locations
                                 .insert(define_context, ContextLocation::DefineFunction(lhs));
                             self.build_context(define_context, define_function.context, path);
                             FunctionAssignmentRhs::Define {
-                                signature,
                                 context: define_context,
                             }
                         }
