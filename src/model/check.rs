@@ -4,7 +4,6 @@ use crate::model::*;
 use itertools::Itertools;
 use std::fmt;
 use std::fmt::Formatter;
-use std::io::stdout;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum ConjureSignatureMarker {
@@ -525,13 +524,15 @@ impl SignatureValue {
                 signature.reduce();
                 _ = literal;
 
-                // TODO: Is this implementation even correct? (same for GiveFunctionToSignature,
-                //  GiveSignatureToFunction, GiveFunctionToFunction)
-                source.substitute_taken_signature(*literal, &**signature);
+                if let SignatureValue::Define {
+                    context,
+                } = &mut **source
+                {
+                    context.substitute_taken_signature(*literal, &**signature);
+                    context.reduce();
 
-                source.reduce();
-
-                *self = *source.clone();
+                    *self = *source.clone();
+                }
             }
             SignatureValue::GiveFunctionToSignature {
                 function,
@@ -541,11 +542,15 @@ impl SignatureValue {
                 function.reduce();
                 _ = literal;
 
-                source.substitute_taken_function(*literal, &**function);
+                if let SignatureValue::Define {
+                    context,
+                } = &mut **source
+                {
+                    context.substitute_taken_function(*literal, &**function);
+                    context.reduce();
 
-                source.reduce();
-
-                *self = *source.clone();
+                    *self = *source.clone();
+                }
             }
         }
     }
@@ -605,11 +610,16 @@ impl FunctionValue {
                 signature.reduce();
                 _ = literal;
 
-                source.substitute_taken_signature(*literal, &**signature);
+                if let FunctionValue::Define {
+                    signature: _,
+                    context,
+                } = &mut **source
+                {
+                    context.substitute_taken_signature(*literal, &**signature);
+                    context.reduce();
 
-                source.reduce();
-
-                *self = *source.clone();
+                    *self = *source.clone();
+                }
             }
             FunctionValue::GiveFunctionToFunction {
                 function,
@@ -619,11 +629,16 @@ impl FunctionValue {
                 function.reduce();
                 _ = literal;
 
-                source.substitute_taken_function(*literal, &**function);
+                if let FunctionValue::Define {
+                    signature: _,
+                    context,
+                } = &mut **source
+                {
+                    context.substitute_taken_function(*literal, &**function);
+                    context.reduce();
 
-                source.reduce();
-
-                *self = *source.clone();
+                    *self = *source.clone();
+                }
             }
         }
     }

@@ -23,10 +23,19 @@
   give p as 'p'
 
 (not) = define
-  (false) = take '(false)'
   (p) = take '(p)'
   p = take (p) 'p'
   false = conjure (false) using p
   give false as 'false'
 
+(not_apply) = define
+  (p) = take '(p)'
+  (not_p) = give (p) as '(p)' to (not)
+  not_p = take (not_p) 'not_p'
+  p = take (p) 'p'
+  not_p_but_p = give p as 'p' to not_p
+  false = take 'false' from not_p_but_p
+  give false as 'false'
+
 give (iff) as '(iff)'
+give (not_apply) as '(not_apply)'
