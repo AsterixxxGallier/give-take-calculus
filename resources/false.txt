@@ -1,41 +1,41 @@
 (implies) = define
-  (p) = take '(p)'
-  (q) = take '(q)'
-  p = take (p) 'p'
+  (p) = take
+  (q) = take
+  p = take (p)
   q = conjure (q) using p
-  give q as 'q'
+  give q
 
 (iff) = define
-  (p) = take '(p)'
-  (q) = take '(q)'
-  (p_implies) = give (p) as '(p)' to (implies)
-  (p_q) = give (q) as '(q)' to (p_implies)
+  (p) = take
+  (q) = take
+  (p_implies) = give (p) to (implies)
+  (p_q) = give (q) to (p_implies)
   (q_implies) = give (q) as '(p)' to (implies)
   (q_p) = give (p) as '(q)' to (q_implies)
   p_q = conjure (p_q)
   q_p = conjure (q_p)
-  give p_q as 'p_q'
-  give q_p as 'q_p'
+  give p_q
+  give q_p
 
 (false) = define
-  (p) = take '(p)'
+  (p) = take
   p = conjure (p)
-  give p as 'p'
+  give p
 
 (not) = define
-  (p) = take '(p)'
-  p = take (p) 'p'
+  (p) = take
+  p = take (p)
   false = conjure (false) using p
-  give false as 'false'
+  give false
 
 not_apply = define
-  (p) = take '(p)'
-  (not_p) = give (p) as '(p)' to (not)
-  not_p = take (not_p) 'not_p'
-  p = take (p) 'p'
-  not_p_but_p = give p as 'p' to not_p
-  false = take 'false' from not_p_but_p
-  give false as 'false'
+  (p) = take
+  (not_p) = give (p) to (not)
+  not_p = take (not_p)
+  p = take (p)
+  not_p_but_p = give p to not_p
+  false = take from not_p_but_p
+  give false
 
-give (iff) as '(iff)'
-give not_apply as 'not_apply'
+give (iff)
+give not_apply

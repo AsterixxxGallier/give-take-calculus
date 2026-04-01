@@ -5,29 +5,34 @@ function  = { symbol }
 signature_literal = { "\'(" ~ symbol ~ ")\'" }
 function_literal  = { "\'" ~ symbol ~ "\'" }
 
+maybe_signature_literal = { (" " ~ signature_literal)? }
+maybe_function_literal = { (" " ~ function_literal)? }
+as_maybe_signature_literal = { (" as " ~ signature_literal)? }
+as_maybe_function_literal = { (" as " ~ function_literal)? }
+
 conjure_dependency   = _{ signature | function }
 conjure_dependencies =  { (" using" ~ (" " ~ conjure_dependency)+)? }
 
 signature_assignment     =  { signature ~ " = " ~ signature_assignment_rhs }
 signature_assignment_rhs = _{ take_signature_from | give_signature_to_signature | give_function_to_signature | take_signature | conjure_signature | define_signature }
-take_signature           =  { "take " ~ signature_literal }
+take_signature           =  { "take" ~ maybe_signature_literal }
 conjure_signature        =  { "conjure" ~ conjure_dependencies }
 define_signature         =  { "define" ~ context }
-take_signature_from      =  { "take " ~ signature_literal ~ " from " ~ function }
-give_signature_to_signature       =  { "give " ~ signature ~ " as " ~ signature_literal ~ " to " ~ signature }
-give_function_to_signature        =  { "give " ~ function ~ " as " ~ function_literal ~ " to " ~ signature }
+take_signature_from      =  { "take" ~ maybe_signature_literal ~ " from " ~ function }
+give_signature_to_signature       =  { "give " ~ signature ~ as_maybe_signature_literal ~ " to " ~ signature }
+give_function_to_signature        =  { "give " ~ function ~ as_maybe_function_literal ~ " to " ~ signature }
 
 function_assignment     =  { function ~ " = " ~ function_assignment_rhs }
 function_assignment_rhs = _{ take_function_from | give_signature_to_function | give_function_to_function | take_function | conjure_function | define_function }
-take_function           =  { "take " ~ signature ~ " " ~ function_literal }
+take_function           =  { "take " ~ signature ~ maybe_function_literal }
 conjure_function        =  { "conjure " ~ signature ~ conjure_dependencies }
 define_function         =  { "define" ~ context }
-take_function_from      =  { "take " ~ function_literal ~ " from " ~ function }
-give_signature_to_function       =  { "give " ~ signature ~ " as " ~ signature_literal ~ " to " ~ function }
-give_function_to_function        =  { "give " ~ function ~ " as " ~ function_literal ~ " to " ~ function }
+take_function_from      =  { "take" ~ maybe_function_literal ~ " from " ~ function }
+give_signature_to_function       =  { "give " ~ signature ~ as_maybe_signature_literal ~ " to " ~ function }
+give_function_to_function        =  { "give " ~ function ~ as_maybe_function_literal ~ " to " ~ function }
 
-give_signature = { "give " ~ signature ~ " as " ~ signature_literal }
-give_function  = { "give " ~ function ~ " as " ~ function_literal }
+give_signature = { "give " ~ signature ~ as_maybe_signature_literal }
+give_function  = { "give " ~ function ~ as_maybe_function_literal }
 
 statement = _{ signature_assignment | function_assignment | give_signature | give_function }
 
