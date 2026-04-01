@@ -1,5 +1,3 @@
-#![allow(unused, reason = "conjuration enumeration code currently unused")]
-
 use crate::model::*;
 use itertools::Itertools;
 use std::fmt;
@@ -8,12 +6,14 @@ use std::fmt::Formatter;
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum ConjureSignatureMarker {
     Id(SignatureId),
+    #[allow(unused)]
     Index(u64),
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum ConjureFunctionMarker {
     Id(FunctionId),
+    #[allow(unused)]
     Index(u64),
 }
 
@@ -325,6 +325,7 @@ impl ContextValue {
 }
 
 impl SignatureValue {
+    #[allow(unused)]
     fn enumerate_conjurations(
         &mut self,
         signature_enumeration: &mut HashMap<SignatureId, u64>,
@@ -391,6 +392,7 @@ impl SignatureValue {
 }
 
 impl FunctionValue {
+    #[allow(unused)]
     fn enumerate_conjurations(
         &mut self,
         signature_enumeration: &mut HashMap<SignatureId, u64>,

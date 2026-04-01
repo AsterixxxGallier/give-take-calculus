@@ -1,275 +1,100 @@
 (implies) = define
-  (p) = take '(p)'
-  (q) = take '(q)'
-  (p_q) = define
-    p = take (p) 'p'
-    q = conjure (q) using p
-    give q as 'q'
-  give (p_q) as '(p_q)'
-
-implies = define (implies)
-  (p) = take '(p)'
-  (q) = take '(q)'
-  (p_q) = define
-    p = take {
-      take '(p)'
-    } 'p'
-    q = conjure {
-      take '(q)'
-    } using {
-      take {
-        take '(p)'
-      } 'p'
-    }
-    give {
-      conjure {
-        take '(q)'
-      } using {
-        take {
-          take '(p)'
-        } 'p'
-      }
-    } as 'q'
-  give {
-    define
-    |   p = take {
-    |     take '(p)'
-    |   } 'p'
-    |   q = conjure {
-    |     take '(q)'
-    |   } using {
-    |     take {
-    |       take '(p)'
-    |     } 'p'
-    |   }
-    |   give {
-    |     conjure {
-    |       take '(q)'
-    |     } using {
-    |       take {
-    |         take '(p)'
-    |       } 'p'
-    |     }
-    |   } as 'q'
-  } as '(p_q)'
+  (p) = take
+  (q) = take
+  p = take (p)
+  q = conjure (q) using p
+  give q
 
 (iff) = define
-  (p) = take '(p)'
-  (q) = take '(q)'
-  p_implies = give {
-    take '(p)'
-  } as '(p)' to {
-    define (implies)
-    |   give {
-    |     define
-    |     |   give {
-    |     |     conjure {
-    |     |       take '(q)'
-    |     |     } using {
-    |     |       take {
-    |     |         take '(p)'
-    |     |       } 'p'
-    |     |     }
-    |     |   } as 'q'
-    |   } as '(p_q)'
-  }
-  # reduce
-  p_implies =
-    define (implies)
-    |   give {
-    |     define
-    |     |   give {
-    |     |     conjure {
-    |     |       take '(q)'
-    |     |     } using {
-    |     |       take {
-    |     |         take '(p)'
-    |     |       } 'p'
-    |     |     }
-    |     |   } as 'q'
-    |   } as '(p_q)'
-  p_implies_q = give {
-    take '(q)'
-  } as '(q)' to {
-    define (implies)
-    |   give {
-    |     define
-    |     |   give {
-    |     |     conjure {
-    |     |       take '(q)'
-    |     |     } using {
-    |     |       take {
-    |     |         take '(p)'
-    |     |       } 'p'
-    |     |     }
-    |     |   } as 'q'
-    |   } as '(p_q)'
-  }
-  # reduce
-  p_implies_q =
-    define (implies)
-    |   give {
-    |     define
-    |     |   give {
-    |     |     conjure {
-    |     |       take '(q)'
-    |     |     } using {
-    |     |       take {
-    |     |         take '(p)'
-    |     |       } 'p'
-    |     |     }
-    |     |   } as 'q'
-    |   } as '(p_q)'
-  (p_q) = take '(p_q)' from {
-    define (implies)
-    |   give {
-    |     define
-    |     |   give {
-    |     |     conjure {
-    |     |       take '(q)'
-    |     |     } using {
-    |     |       take {
-    |     |         take '(p)'
-    |     |       } 'p'
-    |     |     }
-    |     |   } as 'q'
-    |   } as '(p_q)'
-  }
-  # reduce
-  (p_q) =
-    define
-    |   give {
-    |     conjure {
-    |       take '(q)'
-    |     } using {
-    |       take {
-    |         take '(p)'
-    |       } 'p'
-    |     }
-    |   } as 'q'
-  q_implies = give (q) as '(p)' to implies
-  q_implies_p = give (p) as '(q)' to q_implies
-  (q_p) = take '(p_q)' from q_implies_p
-  # fully substituted and reduced
-  (q_p) =
-    define
-    |   give {
-    |     conjure {
-    |       take '(p)'
-    |     } using {
-    |       take {
-    |         take '(q)'
-    |       } 'p'
-    |     }
-    |   } as 'q'
-  (p_iff_q) = define
-    p_q = conjure {
-      define
-      |   give {
-      |     conjure {
-      |       take '(q)'
-      |     } using {
-      |       take {
-      |         take '(p)'
-      |       } 'p'
-      |     }
-      |   } as 'q'
-    }
-    q_p = conjure {
-      define
-      |   give {
-      |     conjure {
-      |       take '(p)'
-      |     } using {
-      |       take {
-      |         take '(q)'
-      |       } 'p'
-      |     }
-      |   } as 'q'
-    }
-    give {
-      conjure {
-        define
-        |   give {
-        |     conjure {
-        |       take '(q)'
-        |     } using {
-        |       take {
-        |         take '(p)'
-        |       } 'p'
-        |     }
-        |   } as 'q'
-      }
-    } as 'p_q'
-    give {
-      conjure {
-        define
-        |   give {
-        |     conjure {
-        |       take '(p)'
-        |     } using {
-        |       take {
-        |         take '(q)'
-        |       } 'p'
-        |     }
-        |   } as 'q'
-      }
-    } as 'q_p'
-  give {
-    define
-    |   take '(p)'
-    |   take '(q)'
-    |   give {
-    |     conjure {
-    |       define
-    |       |   take 'p'
-    |       |   give {
-    |       |     conjure {
-    |       |       take '(q)'
-    |       |     } using {
-    |       |       take {
-    |       |         take '(p)'
-    |       |       } 'p'
-    |       |     }
-    |       |   } as 'q'
-    |     }
-    |   } as 'p_q'
-    |   give {
-    |     conjure {
-    |       define
-    |       |   take 'q'
-    |       |   give {
-    |       |     conjure {
-    |       |       take '(p)'
-    |       |     } using {
-    |       |       take {
-    |       |         take '(q)'
-    |       |       } 'p'
-    |       |     }
-    |       |   } as 'q'
-    |     }
-    |   } as 'q_p'
-  } as '(p_iff_q)'
+  (p) = take
+  (q) = take
+  (p_implies) = give (p) to (implies)
+  (p_q) = give (q) to (p_implies)
+  (q_implies) = give (q) as '(p)' to (implies)
+  (q_p) = give (p) as '(q)' to (q_implies)
+  p_q = conjure (p_q)
+  q_p = conjure (q_p)
+  give p_q
+  give q_p
 
 (false) = define
-  (p) = take '(p)'
+  (p) = take
   p = conjure (p)
-  give p as 'p'
+  give p
 
 (not) = define
-  (p) = take '(p)'
-  (not_p) = define
-    p = take (p) 'p'
-    false = conjure (false) using p
-    give false as 'false'
-  give (not_p) as '(not_p)'
+  (p) = take
+  p = take (p)
+  false = conjure (false) using p
+  give false
 
-not = define (not)
-  (p) = take '(p)'
-  (not_p) = define
-    p = take (p) 'p'
-    false = conjure (false) using p
-    give false as 'false'
-  give (not_p) as '(not_p)'
+not_apply = define
+  (p) = take
+  (not_p) = give (p) to (not)
+  not_p = take (not_p)
+  p = take (p)
+  not_p_but_p = give p to not_p
+  false = take from not_p_but_p
+  give false
 
-give (iff) as '(iff)'
+not_apply = define
+  (p) = take
+
+  not_p = take {
+    (define)
+      p = take { take '(p)' }
+      false = conjure (false) using p
+      give false
+  }
+  p = take { take '(p)' }
+
+  # not_p_but_p = give p to not_p
+  not_p_but_p =
+    give {
+      take { take '(p)' } 'p'
+    } as 'p' to {
+      take {
+        (define)
+          p = take { take '(p)' }
+          false = conjure (false) using p
+          give false
+      } 'not_p'
+    }
+  # reduced
+  not_p_but_p =
+    take {
+      (define)
+        p = take { take '(p)' }
+        false = conjure (false) using p
+        give false
+    } 'not_p'
+
+
+  not_p_but_p =
+    give {
+      take { take '(p)' } 'p'
+    } as 'p' to {
+      take-with-signature 'not_p'
+        p = take { take '(p)' }
+        false = conjure (false) using p
+        give false
+    }
+  # reduced
+  not_p_but_p =
+    take-with-signature 'not_p'
+      give { conjure (false) using { take { take '(p)' } 'p' } } as 'false'
+
+  # false = take from not_p_but_p
+  false = take from {
+    take-with-signature 'not_p'
+      give { conjure (false) using { take { take '(p)' } 'p' } } as 'false'
+  }
+  # reduced
+  false = take from {
+    define
+      give { conjure-from-taken-function 'not_p' (false) using { take { take '(p)' } 'p' } } as 'false'
+  }
+  # reduced
+  false = conjure-from-taken-function 'not_p' (false) using { take { take '(p)' } 'p' }
+
+  give false
