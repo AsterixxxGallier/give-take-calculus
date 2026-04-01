@@ -43,6 +43,16 @@ enum SignatureValue {
         literal: SignatureLiteralId,
         source: Box<FunctionValue>,
     },
+    GiveSignatureToSignature {
+        signature: Box<SignatureValue>,
+        literal: SignatureLiteralId,
+        source: Box<SignatureValue>,
+    },
+    GiveFunctionToSignature {
+        function: Box<FunctionValue>,
+        literal: FunctionLiteralId,
+        source: Box<SignatureValue>,
+    },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -65,12 +75,12 @@ enum FunctionValue {
         literal: FunctionLiteralId,
         source: Box<FunctionValue>,
     },
-    GiveSignatureTo {
+    GiveSignatureToFunction {
         signature: Box<SignatureValue>,
         literal: SignatureLiteralId,
         source: Box<FunctionValue>,
     },
-    GiveFunctionTo {
+    GiveFunctionToFunction {
         function: Box<FunctionValue>,
         literal: FunctionLiteralId,
         source: Box<FunctionValue>,
@@ -131,6 +141,24 @@ impl SignatureValue {
                 _ = literal;
                 source.substitute_taken_signature(id, value);
             }
+            SignatureValue::GiveSignatureToSignature {
+                signature,
+                literal,
+                source,
+            } => {
+                signature.substitute_taken_signature(id, value);
+                _ = literal;
+                source.substitute_taken_signature(id, value);
+            }
+            SignatureValue::GiveFunctionToSignature {
+                function,
+                literal,
+                source,
+            } => {
+                function.substitute_taken_signature(id, value);
+                _ = literal;
+                source.substitute_taken_signature(id, value);
+            }
         }
     }
 
@@ -156,6 +184,24 @@ impl SignatureValue {
                 context.substitute_taken_function(id, value);
             }
             SignatureValue::TakeFrom { literal, source } => {
+                _ = literal;
+                source.substitute_taken_function(id, value);
+            }
+            SignatureValue::GiveSignatureToSignature {
+                signature,
+                literal,
+                source,
+            } => {
+                signature.substitute_taken_function(id, value);
+                _ = literal;
+                source.substitute_taken_function(id, value);
+            }
+            SignatureValue::GiveFunctionToSignature {
+                function,
+                literal,
+                source,
+            } => {
+                function.substitute_taken_function(id, value);
                 _ = literal;
                 source.substitute_taken_function(id, value);
             }
@@ -193,7 +239,7 @@ impl FunctionValue {
                 _ = literal;
                 source.substitute_taken_signature(id, value);
             }
-            FunctionValue::GiveSignatureTo {
+            FunctionValue::GiveSignatureToFunction {
                 signature,
                 literal,
                 source,
@@ -202,7 +248,7 @@ impl FunctionValue {
                 _ = literal;
                 source.substitute_taken_signature(id, value);
             }
-            FunctionValue::GiveFunctionTo {
+            FunctionValue::GiveFunctionToFunction {
                 function,
                 literal,
                 source,
@@ -245,7 +291,7 @@ impl FunctionValue {
                 _ = literal;
                 source.substitute_taken_function(id, value);
             }
-            FunctionValue::GiveSignatureTo {
+            FunctionValue::GiveSignatureToFunction {
                 signature,
                 literal,
                 source,
@@ -254,7 +300,7 @@ impl FunctionValue {
                 _ = literal;
                 source.substitute_taken_function(id, value);
             }
-            FunctionValue::GiveFunctionTo {
+            FunctionValue::GiveFunctionToFunction {
                 function,
                 literal,
                 source,
@@ -326,6 +372,24 @@ impl SignatureValue {
                 _ = literal;
                 source.enumerate_conjurations(signature_enumeration, function_enumeration);
             }
+            SignatureValue::GiveSignatureToSignature {
+                signature,
+                literal,
+                source,
+            } => {
+                signature.enumerate_conjurations(signature_enumeration, function_enumeration);
+                _ = literal;
+                source.enumerate_conjurations(signature_enumeration, function_enumeration);
+            }
+            SignatureValue::GiveFunctionToSignature {
+                function,
+                literal,
+                source,
+            } => {
+                function.enumerate_conjurations(signature_enumeration, function_enumeration);
+                _ = literal;
+                source.enumerate_conjurations(signature_enumeration, function_enumeration);
+            }
         }
     }
 }
@@ -378,7 +442,7 @@ impl FunctionValue {
                 _ = literal;
                 source.enumerate_conjurations(signature_enumeration, function_enumeration);
             }
-            FunctionValue::GiveSignatureTo {
+            FunctionValue::GiveSignatureToFunction {
                 signature,
                 literal,
                 source,
@@ -387,7 +451,7 @@ impl FunctionValue {
                 _ = literal;
                 source.enumerate_conjurations(signature_enumeration, function_enumeration);
             }
-            FunctionValue::GiveFunctionTo {
+            FunctionValue::GiveFunctionToFunction {
                 function,
                 literal,
                 source,
@@ -453,6 +517,36 @@ impl SignatureValue {
                     *self = given_value.clone();
                 }
             }
+            SignatureValue::GiveSignatureToSignature {
+                signature,
+                literal,
+                source,
+            } => {
+                signature.reduce();
+                _ = literal;
+
+                // TODO: Is this implementation even correct? (same for GiveFunctionToSignature,
+                //  GiveSignatureToFunction, GiveFunctionToFunction)
+                source.substitute_taken_signature(*literal, &**signature);
+
+                source.reduce();
+
+                *self = *source.clone();
+            }
+            SignatureValue::GiveFunctionToSignature {
+                function,
+                literal,
+                source,
+            } => {
+                function.reduce();
+                _ = literal;
+
+                source.substitute_taken_function(*literal, &**function);
+
+                source.reduce();
+
+                *self = *source.clone();
+            }
         }
     }
 }
@@ -503,7 +597,7 @@ impl FunctionValue {
                     *self = given_value.clone();
                 }
             }
-            FunctionValue::GiveSignatureTo {
+            FunctionValue::GiveSignatureToFunction {
                 signature,
                 literal,
                 source,
@@ -517,7 +611,7 @@ impl FunctionValue {
 
                 *self = *source.clone();
             }
-            FunctionValue::GiveFunctionTo {
+            FunctionValue::GiveFunctionToFunction {
                 function,
                 literal,
                 source,
@@ -642,6 +736,24 @@ impl<'s> Model<'s> {
                                 source: Box::new(values.function[&source].clone()),
                             }
                         }
+                        SignatureAssignmentRhs::GiveSignatureToSignature {
+                            signature,
+                            literal,
+                            source,
+                        } => SignatureValue::GiveSignatureToSignature {
+                            signature: Box::new(values.signature[&signature].clone()),
+                            literal,
+                            source: Box::new(values.signature[&source].clone()),
+                        },
+                        SignatureAssignmentRhs::GiveFunctionToSignature {
+                            function,
+                            literal,
+                            source,
+                        } => SignatureValue::GiveFunctionToSignature {
+                            function: Box::new(values.function[&function].clone()),
+                            literal,
+                            source: Box::new(values.signature[&source].clone()),
+                        },
                     };
                     value.reduce();
                     values.signature.insert(lhs, value);
@@ -681,20 +793,20 @@ impl<'s> Model<'s> {
                                 source: Box::new(values.function[&source].clone()),
                             }
                         }
-                        FunctionAssignmentRhs::GiveSignatureTo {
+                        FunctionAssignmentRhs::GiveSignatureToFunction {
                             signature,
                             literal,
                             source,
-                        } => FunctionValue::GiveSignatureTo {
+                        } => FunctionValue::GiveSignatureToFunction {
                             signature: Box::new(values.signature[&signature].clone()),
                             literal,
                             source: Box::new(values.function[&source].clone()),
                         },
-                        FunctionAssignmentRhs::GiveFunctionTo {
+                        FunctionAssignmentRhs::GiveFunctionToFunction {
                             function,
                             literal,
                             source,
-                        } => FunctionValue::GiveFunctionTo {
+                        } => FunctionValue::GiveFunctionToFunction {
                             function: Box::new(values.function[&function].clone()),
                             literal,
                             source: Box::new(values.function[&source].clone()),
@@ -854,6 +966,26 @@ impl<'s> Model<'s> {
                 .field_with("literal", |fmt| self.debug_signature_literal(fmt, literal))
                 .field_with("source", |fmt| self.debug_function_value(fmt, &**source))
                 .finish(),
+            SignatureValue::GiveSignatureToSignature {
+                ref signature,
+                literal,
+                ref source,
+            } => fmt
+                .debug_struct("GiveSignatureToSignature")
+                .field_with("signature", |fmt| self.debug_signature_value(fmt, &**signature))
+                .field_with("literal", |fmt| self.debug_signature_literal(fmt, literal))
+                .field_with("source", |fmt| self.debug_signature_value(fmt, &**source))
+                .finish(),
+            SignatureValue::GiveFunctionToSignature {
+                ref function,
+                literal,
+                ref source,
+            } => fmt
+                .debug_struct("GiveFunctionToSignature")
+                .field_with("function", |fmt| self.debug_function_value(fmt, &**function))
+                .field_with("literal", |fmt| self.debug_function_literal(fmt, literal))
+                .field_with("source", |fmt| self.debug_signature_value(fmt, &**source))
+                .finish(),
         }
     }
 
@@ -906,22 +1038,22 @@ impl<'s> Model<'s> {
                 .field_with("literal", |fmt| self.debug_function_literal(fmt, literal))
                 .field_with("source", |fmt| self.debug_function_value(fmt, &**source))
                 .finish(),
-            FunctionValue::GiveSignatureTo {
+            FunctionValue::GiveSignatureToFunction {
                 ref signature,
                 literal,
                 ref source,
             } => fmt
-                .debug_struct("GiveSignatureTo")
+                .debug_struct("GiveSignatureToFunction")
                 .field_with("signature", |fmt| self.debug_signature_value(fmt, &**signature))
                 .field_with("literal", |fmt| self.debug_signature_literal(fmt, literal))
                 .field_with("source", |fmt| self.debug_function_value(fmt, &**source))
                 .finish(),
-            FunctionValue::GiveFunctionTo {
+            FunctionValue::GiveFunctionToFunction {
                 ref function,
                 literal,
                 ref source,
             } => fmt
-                .debug_struct("GiveFunctionTo")
+                .debug_struct("GiveFunctionToFunction")
                 .field_with("function", |fmt| self.debug_function_value(fmt, &**function))
                 .field_with("literal", |fmt| self.debug_function_literal(fmt, literal))
                 .field_with("source", |fmt| self.debug_function_value(fmt, &**source))

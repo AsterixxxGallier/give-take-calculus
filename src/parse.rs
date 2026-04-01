@@ -50,11 +50,27 @@ pub(crate) struct TakeSignatureFrom<'s> {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct GiveSignatureToSignature<'s> {
+    pub(crate) signature: Signature<'s>,
+    pub(crate) literal: SignatureLiteral<'s>,
+    pub(crate) source: Signature<'s>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct GiveFunctionToSignature<'s> {
+    pub(crate) function: Function<'s>,
+    pub(crate) literal: FunctionLiteral<'s>,
+    pub(crate) source: Signature<'s>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum SignatureAssignmentRhs<'s> {
     Take(TakeSignature<'s>),
     Conjure(ConjureSignature<'s>),
     Define(DefineSignature<'s>),
     TakeFrom(TakeSignatureFrom<'s>),
+    GiveSignatureToSignature(GiveSignatureToSignature<'s>),
+    GiveFunctionToSignature(GiveFunctionToSignature<'s>),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -88,14 +104,14 @@ pub(crate) struct TakeFunctionFrom<'s> {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) struct GiveSignatureTo<'s> {
+pub(crate) struct GiveSignatureToFunction<'s> {
     pub(crate) signature: Signature<'s>,
     pub(crate) literal: SignatureLiteral<'s>,
     pub(crate) source: Function<'s>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) struct GiveFunctionTo<'s> {
+pub(crate) struct GiveFunctionToFunction<'s> {
     pub(crate) function: Function<'s>,
     pub(crate) literal: FunctionLiteral<'s>,
     pub(crate) source: Function<'s>,
@@ -107,8 +123,8 @@ pub(crate) enum FunctionAssignmentRhs<'s> {
     Conjure(ConjureFunction<'s>),
     Define(DefineFunction<'s>),
     TakeFrom(TakeFunctionFrom<'s>),
-    GiveSignatureTo(GiveSignatureTo<'s>),
-    GiveFunctionTo(GiveFunctionTo<'s>),
+    GiveSignatureToFunction(GiveSignatureToFunction<'s>),
+    GiveFunctionToFunction(GiveFunctionToFunction<'s>),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -207,6 +223,24 @@ fn parse_take_signature_from(pair: Pair<Rule>) -> TakeSignatureFrom {
     }
 }
 
+fn parse_give_signature_to_signature(pair: Pair<Rule>) -> GiveSignatureToSignature {
+    let (local, literal, source) = pair.into_inner().collect_tuple().unwrap();
+    GiveSignatureToSignature {
+        signature: parse_signature(local),
+        literal: parse_signature_literal(literal),
+        source: parse_signature(source),
+    }
+}
+
+fn parse_give_function_to_signature(pair: Pair<Rule>) -> GiveFunctionToSignature {
+    let (local, literal, source) = pair.into_inner().collect_tuple().unwrap();
+    GiveFunctionToSignature {
+        function: parse_function(local),
+        literal: parse_function_literal(literal),
+        source: parse_signature(source),
+    }
+}
+
 fn parse_take_function(pair: Pair<Rule>) -> TakeFunction {
     let (signature, literal) = pair.into_inner().collect_tuple().unwrap();
     TakeFunction {
@@ -239,18 +273,18 @@ fn parse_take_function_from(pair: Pair<Rule>) -> TakeFunctionFrom {
     }
 }
 
-fn parse_give_signature_to(pair: Pair<Rule>) -> GiveSignatureTo {
+fn parse_give_signature_to_function(pair: Pair<Rule>) -> GiveSignatureToFunction {
     let (local, literal, source) = pair.into_inner().collect_tuple().unwrap();
-    GiveSignatureTo {
+    GiveSignatureToFunction {
         signature: parse_signature(local),
         literal: parse_signature_literal(literal),
         source: parse_function(source),
     }
 }
 
-fn parse_give_function_to(pair: Pair<Rule>) -> GiveFunctionTo {
+fn parse_give_function_to_function(pair: Pair<Rule>) -> GiveFunctionToFunction {
     let (local, literal, source) = pair.into_inner().collect_tuple().unwrap();
-    GiveFunctionTo {
+    GiveFunctionToFunction {
         function: parse_function(local),
         literal: parse_function_literal(literal),
         source: parse_function(source),
@@ -265,6 +299,12 @@ fn parse_signature_assignment_rhs(pair: Pair<Rule>) -> SignatureAssignmentRhs {
         Rule::take_signature_from => {
             SignatureAssignmentRhs::TakeFrom(parse_take_signature_from(pair))
         }
+        Rule::give_signature_to_signature => {
+            SignatureAssignmentRhs::GiveSignatureToSignature(parse_give_signature_to_signature(pair))
+        }
+        Rule::give_function_to_signature => {
+            SignatureAssignmentRhs::GiveFunctionToSignature(parse_give_function_to_signature(pair))
+        }
         _ => unreachable!(),
     }
 }
@@ -275,11 +315,11 @@ fn parse_function_assignment_rhs(pair: Pair<Rule>) -> FunctionAssignmentRhs {
         Rule::conjure_function => FunctionAssignmentRhs::Conjure(parse_conjure_function(pair)),
         Rule::define_function => FunctionAssignmentRhs::Define(parse_define_function(pair)),
         Rule::take_function_from => FunctionAssignmentRhs::TakeFrom(parse_take_function_from(pair)),
-        Rule::give_signature_to => {
-            FunctionAssignmentRhs::GiveSignatureTo(parse_give_signature_to(pair))
+        Rule::give_signature_to_function => {
+            FunctionAssignmentRhs::GiveSignatureToFunction(parse_give_signature_to_function(pair))
         }
-        Rule::give_function_to => {
-            FunctionAssignmentRhs::GiveFunctionTo(parse_give_function_to(pair))
+        Rule::give_function_to_function => {
+            FunctionAssignmentRhs::GiveFunctionToFunction(parse_give_function_to_function(pair))
         }
         _ => unreachable!(),
     }
