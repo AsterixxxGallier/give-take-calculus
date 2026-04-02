@@ -59,6 +59,7 @@ impl<'s> ariadne::Span for SourceLocation<'s> {
 }
 
 impl<'s> SourceLocation<'s> {
+    #[cfg_attr(not(test), expect(unused, reason = "only used in tests"))]
     pub(super) fn new(file: &'s Source<'s>, line: usize, columns: Range<usize>) -> Self {
         assert!(columns.end <= source_line(file, line).len());
         Self {
@@ -82,6 +83,7 @@ impl<'s> SourceLocation<'s> {
         }
     }
 
+    #[allow(unused, reason = "useful for debugging")]
     pub(crate) fn dump(self, message: &str) {
         Report::build(ReportKind::Custom("Dump", Color::Cyan), self)
             .with_label(
@@ -132,15 +134,6 @@ impl<'s> SourceLocation<'s> {
     pub(super) fn grow_start(mut self, by: usize) -> Self {
         assert!(self.start_column >= by, "can't grow source location");
         self.start_column -= by;
-        self
-    }
-
-    pub(super) fn grow_end(mut self, by: usize) -> Self {
-        assert!(
-            self.end_column <= self.line_str().len() - by,
-            "can't grow source location"
-        );
-        self.end_column += by;
         self
     }
 

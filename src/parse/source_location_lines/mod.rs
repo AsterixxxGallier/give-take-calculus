@@ -22,6 +22,7 @@ impl<'s> SourceLocationLines<'s> {
     }
 
     /// Number of lines spanned by this location.
+    #[allow(unused, reason = "for completeness with is_empty")]
     pub(crate) fn len(&self) -> usize {
         self.end_line - self.start_line
     }

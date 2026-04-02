@@ -1,5 +1,4 @@
 use crate::parse::SourceLocation;
-use std::ops::Range;
 
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) struct Source<'s> {
@@ -13,10 +12,6 @@ impl<'s> Source<'s> {
             file_name: file_name.to_owned(),
             inner: ariadne::Source::from(text),
         }
-    }
-
-    pub(super) fn location(&'s self, line: usize, columns: Range<usize>) -> SourceLocation<'s> {
-        SourceLocation::new(self, line, columns)
     }
 
     pub(super) fn full_line(&'s self, line: usize) -> SourceLocation<'s> {

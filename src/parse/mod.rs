@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use std::marker::PhantomData;
 
 mod error;
@@ -37,7 +35,10 @@ macro_rules! LinesParseResult {
 }
 
 pub(crate) fn parse_file<'s>(source: &'s Source<'s>) -> ParseResult!['s, Context] {
-    parse_context(SourceLocationLines::top_level(source)).map(|(rest, context)| context)
+    parse_context(SourceLocationLines::top_level(source)).map(|(rest, context)| {
+        assert!(rest.is_empty());
+        context
+    })
 }
 
 /// If this returns `None`, then all lines in `location` were empty.
@@ -454,6 +455,9 @@ fn parse_take_function_or_take_function_from<'s>(
         let (location, signature) = parse_signature(location)?;
         let (location, literal) = parse_maybe_function_literal(location, implicit_literal)?;
         let location = location.trim_start();
+        if !location.is_empty() {
+            return Err(ParseError::ExpectedEndOfLine { location });
+        }
         let rhs = FunctionAssignmentRhs::Take(TakeFunction { signature, literal });
         Ok(rhs)
     } else {

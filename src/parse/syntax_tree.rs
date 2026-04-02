@@ -15,7 +15,9 @@ pub(crate) struct Function<'s> {
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum SignatureLiteral<'s> {
     Explicit {
+        #[expect(unused)]
         with_ticks: SourceLocation<'s>,
+        #[expect(unused)]
         with_parens: SourceLocation<'s>,
         symbol: SourceLocation<'s>,
     },
@@ -25,6 +27,7 @@ pub(crate) enum SignatureLiteral<'s> {
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum FunctionLiteral<'s> {
     Explicit {
+        #[expect(unused)]
         with_ticks: SourceLocation<'s>,
         symbol: SourceLocation<'s>,
     },
