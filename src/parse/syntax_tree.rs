@@ -1,4 +1,4 @@
-use crate::parse2::SourceLocation;
+use crate::parse::SourceLocation;
 use std::marker::PhantomData;
 
 #[derive(Debug, Copy, Clone)]
@@ -156,3 +156,33 @@ pub(crate) enum Statement<'s> {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Context<'s>(pub(crate) Vec<Statement<'s>>);
+
+impl<'s> Signature<'s> {
+    pub(crate) fn as_str(self) -> &'s str {
+        self.symbol.as_str()
+    }
+}
+
+impl<'s> Function<'s> {
+    pub(crate) fn as_str(self) -> &'s str {
+        self.symbol.as_str()
+    }
+}
+
+impl<'s> SignatureLiteral<'s> {
+    pub(crate) fn as_str(self) -> &'s str {
+        match self {
+            SignatureLiteral::Explicit { symbol, .. } => symbol.as_str(),
+            SignatureLiteral::Implicit(signature) => signature.as_str(),
+        }
+    }
+}
+
+impl<'s> FunctionLiteral<'s> {
+    pub(crate) fn as_str(self) -> &'s str {
+        match self {
+            FunctionLiteral::Explicit { symbol, .. } => symbol.as_str(),
+            FunctionLiteral::Implicit(function) => function.as_str(),
+        }
+    }
+}

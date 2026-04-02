@@ -1,5 +1,5 @@
-use crate::parse2::source::Source;
-use crate::parse2::SourceLocation;
+use crate::parse::source::Source;
+use crate::parse::SourceLocation;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub(crate) struct SourceLocationLines<'s> {

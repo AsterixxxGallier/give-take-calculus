@@ -1,4 +1,4 @@
-use crate::parse2::{Source, SourceLocation};
+use crate::parse::{Source, SourceLocation};
 
 #[test]
 fn grow() {

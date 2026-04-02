@@ -145,17 +145,17 @@ impl<'s> ResolveNames<'s> for ContextContents<'s> {
     }
 }
 
-struct DeepResolver<'s, 'i: 's, 'p> {
-    interpreter: &'i Model<'s>,
+struct DeepResolver<'s, 'm: 's, 'p> {
+    model: &'m Model<'s>,
     path: &'p Vec<ContextId>,
 }
 
-impl<'s, 'i: 's, 'p> ResolveNames<'s> for DeepResolver<'s, 'i, 'p> {
+impl<'s, 'm: 's, 'p> ResolveNames<'s> for DeepResolver<'s, 'm, 'p> {
     fn resolve_signature(&self, name: &'s str) -> Option<SignatureId> {
         self.path
             .iter()
             .filter_map(|&context| {
-                let contents = &self.interpreter.context_contents[&context];
+                let contents = &self.model.context_contents[&context];
                 contents.resolve_signature(name)
             })
             .rev()
@@ -166,7 +166,7 @@ impl<'s, 'i: 's, 'p> ResolveNames<'s> for DeepResolver<'s, 'i, 'p> {
         self.path
             .iter()
             .filter_map(|&context| {
-                let contents = &self.interpreter.context_contents[&context];
+                let contents = &self.model.context_contents[&context];
                 contents.resolve_function(name)
             })
             .rev()
@@ -240,10 +240,7 @@ impl<'s> Model<'s> {
     }
 
     fn deep_resolver<'p>(&self, path: &'p Vec<ContextId>) -> DeepResolver<'s, '_, 'p> {
-        DeepResolver {
-            interpreter: self,
-            path,
-        }
+        DeepResolver { model: self, path }
     }
 
     fn build_context(
@@ -269,7 +266,7 @@ impl<'s> Model<'s> {
 
                     let rhs = match signature_assignment.rhs {
                         parse::SignatureAssignmentRhs::Take(take_signature) => {
-                            let literal = self.signature_literal(take_signature.literal.0);
+                            let literal = self.signature_literal(take_signature.literal.as_str());
                             SignatureAssignmentRhs::Take { literal }
                         }
                         parse::SignatureAssignmentRhs::Conjure(conjure_signature) => {
@@ -289,32 +286,38 @@ impl<'s> Model<'s> {
                         parse::SignatureAssignmentRhs::TakeFrom(take_signature_from) => {
                             let source = self
                                 .deep_resolver(path)
-                                .resolve_function_unwrap(take_signature_from.source.0);
-                            let literal = self.signature_literal(take_signature_from.literal.0);
+                                .resolve_function_unwrap(take_signature_from.source.as_str());
+                            let literal =
+                                self.signature_literal(take_signature_from.literal.as_str());
                             SignatureAssignmentRhs::TakeFrom { literal, source }
                         }
-                        parse::SignatureAssignmentRhs::GiveSignatureToSignature(give_signature_to) => {
+                        parse::SignatureAssignmentRhs::GiveSignatureToSignature(
+                            give_signature_to,
+                        ) => {
                             let signature = self
                                 .deep_resolver(path)
-                                .resolve_signature_unwrap(give_signature_to.signature.0);
-                            let literal = self.signature_literal(give_signature_to.literal.0);
+                                .resolve_signature_unwrap(give_signature_to.signature.as_str());
+                            let literal =
+                                self.signature_literal(give_signature_to.literal.as_str());
                             let source = self
                                 .deep_resolver(path)
-                                .resolve_signature_unwrap(give_signature_to.source.0);
+                                .resolve_signature_unwrap(give_signature_to.source.as_str());
                             SignatureAssignmentRhs::GiveSignatureToSignature {
                                 signature,
                                 literal,
                                 source,
                             }
                         }
-                        parse::SignatureAssignmentRhs::GiveFunctionToSignature(give_function_to) => {
+                        parse::SignatureAssignmentRhs::GiveFunctionToSignature(
+                            give_function_to,
+                        ) => {
                             let function = self
                                 .deep_resolver(path)
-                                .resolve_function_unwrap(give_function_to.function.0);
-                            let literal = self.function_literal(give_function_to.literal.0);
+                                .resolve_function_unwrap(give_function_to.function.as_str());
+                            let literal = self.function_literal(give_function_to.literal.as_str());
                             let source = self
                                 .deep_resolver(path)
-                                .resolve_signature_unwrap(give_function_to.source.0);
+                                .resolve_signature_unwrap(give_function_to.source.as_str());
                             SignatureAssignmentRhs::GiveFunctionToSignature {
                                 function,
                                 literal,
@@ -323,7 +326,7 @@ impl<'s> Model<'s> {
                         }
                     };
 
-                    let lhs_name = signature_assignment.lhs.0;
+                    let lhs_name = signature_assignment.lhs.as_str();
                     let contents = self.context_contents.get_mut(&context).unwrap();
                     contents.name_to_signature.insert(lhs_name, lhs);
                     contents
@@ -339,17 +342,15 @@ impl<'s> Model<'s> {
                         parse::FunctionAssignmentRhs::Take(take_function) => {
                             let signature = self
                                 .deep_resolver(path)
-                                .resolve_signature_unwrap(take_function.signature.0);
-                            let literal = self.function_literal(take_function.literal.0);
+                                .resolve_signature_unwrap(take_function.signature.as_str());
+                            let literal = self.function_literal(take_function.literal.as_str());
                             FunctionAssignmentRhs::Take { signature, literal }
                         }
                         parse::FunctionAssignmentRhs::Conjure(conjure_function) => {
                             let signature = self
                                 .deep_resolver(path)
-                                .resolve_signature_unwrap(conjure_function.signature.0);
-                            FunctionAssignmentRhs::Conjure {
-                                signature,
-                            }
+                                .resolve_signature_unwrap(conjure_function.signature.as_str());
+                            FunctionAssignmentRhs::Conjure { signature }
                         }
                         parse::FunctionAssignmentRhs::Define(define_function) => {
                             let define_context = ContextId::generate();
@@ -363,18 +364,22 @@ impl<'s> Model<'s> {
                         parse::FunctionAssignmentRhs::TakeFrom(take_function_from) => {
                             let source = self
                                 .deep_resolver(path)
-                                .resolve_function_unwrap(take_function_from.source.0);
-                            let literal = self.function_literal(take_function_from.literal.0);
+                                .resolve_function_unwrap(take_function_from.source.as_str());
+                            let literal =
+                                self.function_literal(take_function_from.literal.as_str());
                             FunctionAssignmentRhs::TakeFrom { literal, source }
                         }
-                        parse::FunctionAssignmentRhs::GiveSignatureToFunction(give_signature_to) => {
+                        parse::FunctionAssignmentRhs::GiveSignatureToFunction(
+                            give_signature_to,
+                        ) => {
                             let signature = self
                                 .deep_resolver(path)
-                                .resolve_signature_unwrap(give_signature_to.signature.0);
-                            let literal = self.signature_literal(give_signature_to.literal.0);
+                                .resolve_signature_unwrap(give_signature_to.signature.as_str());
+                            let literal =
+                                self.signature_literal(give_signature_to.literal.as_str());
                             let source = self
                                 .deep_resolver(path)
-                                .resolve_function_unwrap(give_signature_to.source.0);
+                                .resolve_function_unwrap(give_signature_to.source.as_str());
                             FunctionAssignmentRhs::GiveSignatureToFunction {
                                 signature,
                                 literal,
@@ -384,11 +389,11 @@ impl<'s> Model<'s> {
                         parse::FunctionAssignmentRhs::GiveFunctionToFunction(give_function_to) => {
                             let function = self
                                 .deep_resolver(path)
-                                .resolve_function_unwrap(give_function_to.function.0);
-                            let literal = self.function_literal(give_function_to.literal.0);
+                                .resolve_function_unwrap(give_function_to.function.as_str());
+                            let literal = self.function_literal(give_function_to.literal.as_str());
                             let source = self
                                 .deep_resolver(path)
-                                .resolve_function_unwrap(give_function_to.source.0);
+                                .resolve_function_unwrap(give_function_to.source.as_str());
                             FunctionAssignmentRhs::GiveFunctionToFunction {
                                 function,
                                 literal,
@@ -397,7 +402,7 @@ impl<'s> Model<'s> {
                         }
                     };
 
-                    let lhs_name = function_assignment.lhs.0;
+                    let lhs_name = function_assignment.lhs.as_str();
                     let contents = self.context_contents.get_mut(&context).unwrap();
                     contents.name_to_function.insert(lhs_name, lhs);
                     contents
@@ -407,20 +412,20 @@ impl<'s> Model<'s> {
                     self.function_locations.insert(lhs, context);
                 }
                 parse::Statement::GiveSignature(give_signature) => {
-                    let literal = self.signature_literal(give_signature.literal.0);
+                    let literal = self.signature_literal(give_signature.literal.as_str());
                     let signature = self
                         .deep_resolver(path)
-                        .resolve_signature_unwrap(give_signature.signature.0);
+                        .resolve_signature_unwrap(give_signature.signature.as_str());
                     let contents = self.context_contents.get_mut(&context).unwrap();
                     contents
                         .statements
                         .push(Statement::GiveSignature { signature, literal });
                 }
                 parse::Statement::GiveFunction(give_function) => {
-                    let literal = self.function_literal(give_function.literal.0);
+                    let literal = self.function_literal(give_function.literal.as_str());
                     let function = self
                         .deep_resolver(path)
-                        .resolve_function_unwrap(give_function.function.0);
+                        .resolve_function_unwrap(give_function.function.as_str());
                     let contents = self.context_contents.get_mut(&context).unwrap();
                     contents
                         .statements

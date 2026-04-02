@@ -1,4 +1,4 @@
-use crate::parse2::SourceLocation;
+use crate::parse::SourceLocation;
 use ariadne::{Color, Label, Report, ReportKind};
 
 #[derive(Debug)]
