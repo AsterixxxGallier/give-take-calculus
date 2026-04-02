@@ -10,6 +10,7 @@ pub(crate) enum ParseError<'s> {
     InsufficientIndentation {
         indentation: SourceLocation<'s>,
     },
+    UnexpectedIndentation { indentation: SourceLocation<'s> },
     ExpectedStatement {
         location: SourceLocation<'s>,
     },
@@ -79,6 +80,9 @@ impl<'s> ParseError<'s> {
             }
             ParseError::InsufficientIndentation { indentation } => {
                 simple_report(indentation, "insufficient indentation")
+            }
+            ParseError::UnexpectedIndentation { indentation } => {
+                simple_report(indentation, "unexpected indentation")
             }
             ParseError::ExpectedStatement { location } => {
                 simple_report(location, "expected statement")

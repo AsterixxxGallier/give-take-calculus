@@ -1,4 +1,5 @@
 use crate::parse2::source::Source;
+use ariadne::{Color, Label, Report, ReportKind};
 use std::ops::Range;
 use std::str::pattern::{DoubleEndedSearcher, Pattern, ReverseSearcher, SearchStep, Searcher};
 
@@ -59,6 +60,19 @@ impl<'s> SourceLocation<'s> {
             end_column: source_line(file, line).len(),
             line_offset: file.inner.line(line).unwrap().offset(),
         }
+    }
+
+    pub(crate) fn dump(self, message: &str) {
+        Report::build(ReportKind::Custom("Dump", Color::Cyan), self)
+            .with_label(
+                Label::new(self)
+                    .with_color(Color::Green)
+                    .with_message("here"),
+            )
+            .with_message(message)
+            .finish()
+            .eprint((self.file.file_name.clone(), &self.file.inner))
+            .unwrap();
     }
 
     fn line_str(&self) -> &'s str {
@@ -148,6 +162,8 @@ impl<'s> SourceLocation<'s> {
             // start is relative to self.as_str(), hence += instead of +
             rejected_part.start_column += start;
             matching_part.end_column = matching_part.start_column + start;
+        } else {
+            rejected_part.start_column = rejected_part.end_column;
         }
         (matching_part, rejected_part)
     }
@@ -159,6 +175,8 @@ impl<'s> SourceLocation<'s> {
             // pattern
             // start is relative to self.as_str(), hence += instead of +
             self.start_column += start;
+        } else {
+            self.start_column = self.end_column;
         }
         self
     }

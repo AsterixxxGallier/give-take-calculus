@@ -6,16 +6,19 @@ use std::str::pattern::{DoubleEndedSearcher, Pattern, ReverseSearcher, Searcher}
 mod error;
 mod source;
 mod source_location;
+mod source_location_lines;
 mod syntax_tree;
 
 pub(crate) use error::*;
 pub(crate) use source::*;
 pub(crate) use source_location::*;
+pub(crate) use source_location_lines::*;
 pub(crate) use syntax_tree::*;
 
 #[allow(non_snake_case, reason = "used in type position")]
 macro_rules! ParseResult {
     ($l:lifetime, $t:ident) => { Result<$t<$l>, ParseError<$l>>};
+    ($t:ident) => { Result<$t<'_>, ParseError<'_>>};
 }
 
 #[allow(non_snake_case, reason = "used in type position")]
@@ -26,29 +29,35 @@ macro_rules! LocationParseResult {
     () => { Result<SourceLocation<'_>, ParseError<'_>>};
 }
 
-pub(crate) fn parse_file<'s>(source: &'s Source<'s>) -> ParseResult!['s, Context] {
-    parse_context(source, &mut 0, None)
+#[allow(non_snake_case, reason = "used in type position")]
+macro_rules! LinesParseResult {
+    ($l:lifetime, $t:ident) => { Result<(SourceLocationLines<$l>, $t<$l>), ParseError<$l>>};
+    ($l:lifetime) => { Result<SourceLocationLines<$l>, ParseError<$l>>};
+    ($t:ident) => { Result<(SourceLocationLines<'_>, $t<'_>), ParseError<'_>>};
+    () => { Result<SourceLocationLines<'_>, ParseError<'_>>};
 }
 
-/// Returns true if there are more (non-empty) lines in the file. If this function returns true,
-/// then `line_index` is the index of the next non-empty line. Else, it is `source.lines.len()`.
-fn skip_empty_lines<'s>(source: &'s Source<'s>, line_index: &mut usize) -> bool {
-    loop {
-        let line = source.full_line(*line_index);
+pub(crate) fn parse_file<'s>(source: &'s Source<'s>) -> ParseResult!['s, Context] {
+    parse_context(SourceLocationLines::top_level(source)).map(|(rest, context)| context)
+}
+
+/// If this returns `None`, then all lines in `location` were empty.
+/// If this returns `Some(new_location)`, `new_location` is non-empty and starts with a non-empty
+/// line.
+fn skip_empty_lines(mut location: SourceLocationLines) -> Option<SourceLocationLines> {
+    while let Some(line) = location.first() {
         // remove leading whitespace
         let line = line.trim_start();
         // only whitespace or comment
         let line_is_empty = line.is_empty() || line.starts_with("#");
-        let line_is_last = *line_index == source.inner.lines().len();
-        if line_is_last {
-            break false;
-        } else if !line_is_empty {
-            break true;
+        if !line_is_empty {
+            return Some(location);
         } else {
-            *line_index += 1;
-            continue;
+            // if location were empty, we wouldn't have entered the while loop body
+            location = location.advance().expect("shouldn't be empty");
         }
     }
+    None
 }
 
 fn parse_as(location: SourceLocation<'_>) -> LocationParseResult![] {
@@ -97,6 +106,19 @@ fn parse_signature(location: SourceLocation<'_>) -> LocationParseResult![Signatu
     }
 }
 
+fn parse_function(location: SourceLocation<'_>) -> LocationParseResult![Function] {
+    match parse_symbol(location) {
+        Ok((location, symbol)) => {
+            let function = Function { symbol };
+            Ok((location, function))
+        }
+        Err(ParseError::ExpectedSignatureOrFunction { location }) => {
+            Err(ParseError::ExpectedFunction { location })
+        }
+        Err(other) => Err(other),
+    }
+}
+
 fn parse_signature_literal(location: SourceLocation<'_>) -> LocationParseResult![SignatureLiteral] {
     if let Some(location) = location.strip_prefix('\'') {
         match parse_signature(location) {
@@ -125,6 +147,33 @@ fn parse_signature_literal(location: SourceLocation<'_>) -> LocationParseResult!
     }
 }
 
+fn parse_function_literal(location: SourceLocation<'_>) -> LocationParseResult![FunctionLiteral] {
+    if let Some(location) = location.strip_prefix('\'') {
+        match parse_function(location) {
+            Ok((location, function)) => {
+                if let Some(location) = location.strip_prefix('\'') {
+                    let literal = FunctionLiteral::Explicit {
+                        with_ticks: function.symbol.grow(1),
+                        symbol: function.symbol,
+                    };
+                    Ok((location, literal))
+                } else {
+                    let location = location.truncate(1);
+                    Err(ParseError::ExpectedClosingTick { location })
+                }
+            }
+            Err(ParseError::ExpectedFunction { location }) => {
+                let location = location.grow_start(1);
+                Err(ParseError::ExpectedFunctionLiteral { location })
+            }
+            Err(other) => Err(other),
+        }
+    } else {
+        let location = location.take_until_whitespace();
+        Err(ParseError::ExpectedFunctionLiteral { location })
+    }
+}
+
 fn parse_maybe_as_signature_literal<'s>(
     location: SourceLocation<'s>,
     implicit: Signature<'s>,
@@ -138,42 +187,73 @@ fn parse_maybe_as_signature_literal<'s>(
     }
 }
 
-fn parse_give_statement<'s>(
-    source: &'s Source<'s>,
-    line_index: &'_ mut usize,
-) -> ParseResult!['s, Statement] {
-    let location = source.full_line(*line_index);
-    let location = location.trim();
-    let location = location
+fn parse_maybe_as_function_literal<'s>(
+    location: SourceLocation<'s>,
+    implicit: Function<'s>,
+) -> LocationParseResult!['s, FunctionLiteral] {
+    if let Some(location) = location.strip_prefix("as") {
+        let location = location.trim_start();
+        let (location, literal) = parse_function_literal(location)?;
+        Ok((location, literal))
+    } else {
+        Ok((location, FunctionLiteral::Implicit(implicit)))
+    }
+}
+
+fn parse_give_signature_statement(location: SourceLocation<'_>) -> ParseResult![Statement] {
+    let (location, signature) = parse_signature(location)?;
+    let location = location.trim_start();
+    let (location, literal) = parse_maybe_as_signature_literal(location, signature)?;
+    let location = location.trim_start();
+    if !location.is_empty() {
+        match literal {
+            SignatureLiteral::Explicit { .. } => {
+                Err(ParseError::ExpectedEndOfLine { location })
+            }
+            SignatureLiteral::Implicit(_) => {
+                Err(ParseError::ExpectedAsOrEndOfLine { location })
+            }
+        }
+    } else {
+        Ok(Statement::GiveSignature(GiveSignature { signature, literal }))
+    }
+}
+
+fn parse_give_function_statement(location: SourceLocation<'_>) -> ParseResult![Statement] {
+    let (location, function) = parse_function(location)?;
+    let location = location.trim_start();
+    let (location, literal) = parse_maybe_as_function_literal(location, function)?;
+    let location = location.trim_start();
+    if !location.is_empty() {
+        match literal {
+            FunctionLiteral::Explicit { .. } => {
+                Err(ParseError::ExpectedEndOfLine { location })
+            }
+            FunctionLiteral::Implicit(_) => {
+                Err(ParseError::ExpectedAsOrEndOfLine { location })
+            }
+        }
+    } else {
+        Ok(Statement::GiveFunction(GiveFunction { function, literal }))
+    }
+}
+
+fn parse_give_statement(location: SourceLocationLines<'_>) -> LinesParseResult![Statement] {
+    let line = location.first().expect("should not be empty");
+    let line = line.trim_start();
+    let line = line
         .strip_prefix("give")
         .expect("line should start with 'give'");
-    let location = location.trim_start();
+    let line = line.trim_start();
 
-    if location.starts_with('(') {
-        let (location, signature) = parse_signature(location)?;
-        let location = location.trim_start();
-        let (location, literal) = parse_maybe_as_signature_literal(location, signature)?;
-        let location = location.trim_start();
-        if !location.is_empty() {
-            match literal {
-                SignatureLiteral::Explicit { .. } => {
-                    Err(ParseError::ExpectedEndOfLine { location })
-                }
-                SignatureLiteral::Implicit(_) => {
-                    Err(ParseError::ExpectedAsOrEndOfLine { location })
-                }
-            }
-        } else {
-            *line_index += 1;
-            Ok(Statement::GiveSignature(GiveSignature {
-                signature,
-                literal,
-            }))
-        }
-    } else if location.starts_with(is_symbol_char) {
-        todo!()
+    if line.starts_with('(') {
+        let statement = parse_give_signature_statement(line)?;
+        Ok((location.advance().expect("should not be empty"), statement))
+    } else if line.starts_with(is_symbol_char) {
+        let statement = parse_give_function_statement(line)?;
+        Ok((location.advance().expect("should not be empty"), statement))
     } else {
-        Err(ParseError::ExpectedSignatureOrFunction { location })
+        Err(ParseError::ExpectedSignatureOrFunction { location: line })
     }
 }
 
@@ -181,72 +261,54 @@ fn is_symbol_char(char: char) -> bool {
     !char.is_whitespace() && char != '\'' && char != '(' && char != ')' && char != '='
 }
 
-fn parse_statement<'s>(
-    source: &'s Source<'s>,
-    line_index: &mut usize,
-    indentation: SourceLocation<'s>,
-) -> ParseResult!['s, Statement] {
-    // caller checked indentation
-
-    let location = source.full_line(*line_index);
-    let location = location.trim();
-    let line = location.as_str();
+fn parse_statement(mut location: SourceLocationLines<'_>) -> LinesParseResult![Statement] {
+    let line = location.first().expect("should not be empty");
+    // caller (parse_context) handled indentation, which we can safely trim away
+    let line = line.trim_start();
 
     if line.starts_with("give") {
-        parse_give_statement(source, line_index)
+        parse_give_statement(location)
     } else if line.starts_with('(') || line.starts_with(is_symbol_char) {
         // parse_assignment_statement(source, line_index, indentation)
         todo!()
     } else {
-        Err(ParseError::ExpectedStatement { location })
+        Err(ParseError::ExpectedStatement { location: line })
     }
 }
 
-fn parse_context<'s>(
-    source: &'s Source<'s>,
-    line_index: &mut usize,
-    indentation: Option<SourceLocation<'s>>,
-) -> ParseResult!['s, Context] {
+fn parse_context(mut location: SourceLocationLines<'_>) -> LinesParseResult![Context] {
     let mut statements = Vec::new();
 
-    if skip_empty_lines(source, line_index) {
-        // Use first non-empty line indentation as indentation for context.
+    while let Some(new_location) = skip_empty_lines(location) {
+        location = new_location;
 
-        let line = source.full_line(*line_index);
+        // skip_empty_lines shouldn't return Some(new_location) with empty new_location
+        let line = new_location.first().expect("should not be empty");
 
-        let new_indentation = line.take_while_whitespace();
-
-        if let Some(indentation) = indentation {
-            if !line.starts_with(indentation.as_str()) {
+        let indentation = line.take_while_whitespace();
+        if let Some(reference_indentation) = location.reference_indentation {
+            if !line.starts_with(reference_indentation.as_str()) {
+                // indentation has been reduced
+                // => assume the next line is outside the context (one indentation level less)
+                break;
+            }
+            if indentation.as_str() != reference_indentation.as_str() {
+                // indentation has changed in another way
                 return Err(ParseError::IndentationMismatch {
-                    expected_indentation: indentation,
-                    actual_indentation: new_indentation,
+                    expected_indentation: reference_indentation,
+                    actual_indentation: indentation,
                 });
             }
-        }
-
-        if new_indentation.len() == indentation.map_or(0, |indentation| indentation.len()) {
-            return Err(ParseError::InsufficientIndentation {
-                indentation: new_indentation,
-            });
-        }
-
-        loop {
-            let line = source.full_line(*line_index);
-            if !line.starts_with(new_indentation.as_str()) {
-                // context indentation does not apply for this line
-                // => assume the next line is outside the context (one indentation level less)
-                // if this assumption is false (and the indentation is simply nonsensical), the
-                // caller will return a ParseError::IndentationMismatch
-                break;
-            }
-
-            statements.push(parse_statement(source, line_index, new_indentation)?);
-            if !skip_empty_lines(source, line_index) {
-                break;
+        } else {
+            if !indentation.is_empty() {
+                return Err(ParseError::UnexpectedIndentation { indentation });
             }
         }
+
+        let (new_location, statement) = parse_statement(location)?;
+        location = new_location;
+        statements.push(statement);
     }
 
-    Ok(Context(statements))
+    Ok((location, Context(statements)))
 }
