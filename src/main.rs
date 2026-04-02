@@ -10,12 +10,13 @@ mod parse2;
 mod model;
 
 fn main() {
-    let path = "resources/simple.txt";
+    let path = "resources/false.txt";
     let text = std::fs::read_to_string(path).unwrap();
     let source = Source::new(path, text.as_str());
     match parse2::parse_file(&source) {
-        Ok(_) => {
+        Ok(context) => {
             println!("parsing successful");
+            println!("{:#?}", context);
         }
         Err(error) => {
             error.report().eprint((path.to_owned(), &source.inner)).unwrap();

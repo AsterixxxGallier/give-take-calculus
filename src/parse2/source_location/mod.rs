@@ -1,5 +1,6 @@
 use crate::parse2::source::Source;
 use ariadne::{Color, Label, Report, ReportKind};
+use std::fmt::{Debug, Formatter};
 use std::ops::Range;
 use std::str::pattern::{DoubleEndedSearcher, Pattern, ReverseSearcher, SearchStep, Searcher};
 
@@ -7,10 +8,15 @@ use std::str::pattern::{DoubleEndedSearcher, Pattern, ReverseSearcher, SearchSte
 mod test;
 
 fn source_line<'s>(source: &'s Source<'s>, index: usize) -> &'s str {
-    source.inner.get_line_text(source.inner.line(index).unwrap()).unwrap()
+    source
+        .inner
+        .get_line_text(source.inner.line(index).unwrap())
+        .unwrap()
+        .trim_end_matches("\r\n")
+        .trim_end_matches("\n")
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) struct SourceLocation<'s> {
     pub(crate) file: &'s Source<'s>,
     pub(crate) line: usize,
@@ -20,6 +26,20 @@ pub(crate) struct SourceLocation<'s> {
     /// exclusive start bound
     pub(crate) end_column: usize,
     pub(crate) line_offset: usize,
+}
+
+impl<'s> Debug for SourceLocation<'s> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[{}:{} {}-{}] {:?}",
+            self.file.file_name,
+            self.line + 1,
+            self.start_column,
+            self.end_column,
+            self.as_str()
+        )
+    }
 }
 
 impl<'s> ariadne::Span for SourceLocation<'s> {

@@ -10,7 +10,9 @@ pub(crate) enum ParseError<'s> {
     InsufficientIndentation {
         indentation: SourceLocation<'s>,
     },
-    UnexpectedIndentation { indentation: SourceLocation<'s> },
+    UnexpectedIndentation {
+        indentation: SourceLocation<'s>,
+    },
     ExpectedStatement {
         location: SourceLocation<'s>,
     },
@@ -41,7 +43,31 @@ pub(crate) enum ParseError<'s> {
     ExpectedAsOrEndOfLine {
         location: SourceLocation<'s>,
     },
+    ExpectedFromOrEndOfLine {
+        location: SourceLocation<'s>,
+    },
     ExpectedEquals {
+        location: SourceLocation<'s>,
+    },
+    ExpectedSignatureAssignmentRhs {
+        location: SourceLocation<'s>,
+    },
+    ExpectedTo {
+        location: SourceLocation<'s>,
+    },
+    ExpectedAsOrTo {
+        location: SourceLocation<'s>,
+    },
+    ExpectedFunctionAssignmentRhs {
+        location: SourceLocation<'s>,
+    },
+    ExpectedFromOrSignatureLiteralOrEndOfLine {
+        location: SourceLocation<'s>,
+    },
+    ExpectedFromOrSignature {
+        location: SourceLocation<'s>,
+    },
+    ExpectedFromOrSignatureOrFunctionLiteral {
         location: SourceLocation<'s>,
     },
 }
@@ -63,21 +89,22 @@ fn simple_report<'s>(
 impl<'s> ParseError<'s> {
     pub(crate) fn report(self) -> Report<'s, SourceLocation<'s>> {
         match self {
-            ParseError::IndentationMismatch { expected_indentation, actual_indentation } => {
-                Report::build(ReportKind::Error, actual_indentation)
-                    .with_label(
-                        Label::new(actual_indentation)
-                            .with_color(Color::BrightRed)
-                            .with_message("this indentation..."),
-                    )
-                    .with_label(
-                        Label::new(expected_indentation)
-                            .with_color(Color::Cyan)
-                            .with_message("... should be like this"),
-                    )
-                    .with_message("indentation mismatch")
-                    .finish()
-            }
+            ParseError::IndentationMismatch {
+                expected_indentation,
+                actual_indentation,
+            } => Report::build(ReportKind::Error, actual_indentation)
+                .with_label(
+                    Label::new(actual_indentation)
+                        .with_color(Color::BrightRed)
+                        .with_message("this indentation..."),
+                )
+                .with_label(
+                    Label::new(expected_indentation)
+                        .with_color(Color::Cyan)
+                        .with_message("... should be like this"),
+                )
+                .with_message("indentation mismatch")
+                .finish(),
             ParseError::InsufficientIndentation { indentation } => {
                 simple_report(indentation, "insufficient indentation")
             }
@@ -114,9 +141,35 @@ impl<'s> ParseError<'s> {
             ParseError::ExpectedAsOrEndOfLine { location } => {
                 simple_report(location, "expected 'as' keyword or end of line")
             }
+            ParseError::ExpectedFromOrEndOfLine { location } => {
+                simple_report(location, "expected 'from' keyword or end of line")
+            }
             ParseError::ExpectedEquals { location } => {
                 simple_report(location, "expected equals sign")
             }
+            ParseError::ExpectedSignatureAssignmentRhs { location } => simple_report(
+                location,
+                "expected 'define', 'give', 'take' or 'conjure' keyword",
+            ),
+            ParseError::ExpectedFunctionAssignmentRhs { location } => simple_report(
+                location,
+                "expected 'define', 'give', 'take' or 'conjure' keyword",
+            ),
+            ParseError::ExpectedTo { location } => simple_report(location, "expected 'to' keyword"),
+            ParseError::ExpectedAsOrTo { location } => {
+                simple_report(location, "expected 'as' or 'to' keyword")
+            }
+            ParseError::ExpectedFromOrSignatureLiteralOrEndOfLine { location } => simple_report(
+                location,
+                "expected 'from' keyword, signature literal or end of line",
+            ),
+            ParseError::ExpectedFromOrSignature { location } => {
+                simple_report(location, "expected 'from' keyword or signature")
+            }
+            ParseError::ExpectedFromOrSignatureOrFunctionLiteral { location } => simple_report(
+                location,
+                "expected 'from' keyword, function literal or signature",
+            ),
         }
     }
 }

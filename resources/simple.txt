@@ -5,3 +5,4 @@ give bar as 'bar'
 (x) = define
   (foo) = conjure
   give (foo) as '(bar)'
+  (bar) = give x as 'y' to (foo)
