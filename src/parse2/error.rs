@@ -35,13 +35,13 @@ pub(crate) enum ParseError<'s> {
     ExpectedClosingTick {
         location: SourceLocation<'s>,
     },
-    ExpectedAs {
-        location: SourceLocation<'s>,
-    },
     ExpectedEndOfLine {
         location: SourceLocation<'s>,
     },
     ExpectedAsOrEndOfLine {
+        location: SourceLocation<'s>,
+    },
+    ExpectedEquals {
         location: SourceLocation<'s>,
     },
 }
@@ -108,14 +108,14 @@ impl<'s> ParseError<'s> {
             ParseError::ExpectedClosingTick { location } => {
                 simple_report(location, "expected single quotation mark")
             }
-            ParseError::ExpectedAs { location } => {
-                simple_report(location, "expected 'as' keyword")
-            }
             ParseError::ExpectedEndOfLine { location } => {
                 simple_report(location, "expected end of line")
             }
             ParseError::ExpectedAsOrEndOfLine { location } => {
                 simple_report(location, "expected 'as' keyword or end of line")
+            }
+            ParseError::ExpectedEquals { location } => {
+                simple_report(location, "expected equals sign")
             }
         }
     }

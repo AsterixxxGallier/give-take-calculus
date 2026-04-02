@@ -2,3 +2,6 @@ give (foo)
 give foo
 give (foo) as '(bar)'
 give bar as 'bar'
+(x) = define
+  (foo) = conjure
+  give (foo) as '(bar)'

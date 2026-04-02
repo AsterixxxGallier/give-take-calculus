@@ -53,7 +53,7 @@ impl<'s> SourceLocationLines<'s> {
         mut self,
         reference_indentation: SourceLocation<'s>,
     ) -> Self {
-        self.reference_indentation = self.reference_indentation;
+        self.reference_indentation = Some(reference_indentation);
         self
     }
 }

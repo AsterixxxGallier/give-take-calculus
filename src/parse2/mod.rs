@@ -1,7 +1,6 @@
 #![allow(unused)]
 
-use std::fmt::Debug;
-use std::str::pattern::{DoubleEndedSearcher, Pattern, ReverseSearcher, Searcher};
+use std::marker::PhantomData;
 
 mod error;
 mod source;
@@ -58,15 +57,6 @@ fn skip_empty_lines(mut location: SourceLocationLines) -> Option<SourceLocationL
         }
     }
     None
-}
-
-fn parse_as(location: SourceLocation<'_>) -> LocationParseResult![] {
-    if let Some(rest) = location.strip_prefix("as") {
-        Ok(rest)
-    } else {
-        let location = location.truncate(2);
-        Err(ParseError::ExpectedAs { location })
-    }
 }
 
 fn parse_symbol(location: SourceLocation<'_>) -> LocationParseResult![SourceLocation] {
@@ -207,15 +197,14 @@ fn parse_give_signature_statement(location: SourceLocation<'_>) -> ParseResult![
     let location = location.trim_start();
     if !location.is_empty() {
         match literal {
-            SignatureLiteral::Explicit { .. } => {
-                Err(ParseError::ExpectedEndOfLine { location })
-            }
-            SignatureLiteral::Implicit(_) => {
-                Err(ParseError::ExpectedAsOrEndOfLine { location })
-            }
+            SignatureLiteral::Explicit { .. } => Err(ParseError::ExpectedEndOfLine { location }),
+            SignatureLiteral::Implicit(_) => Err(ParseError::ExpectedAsOrEndOfLine { location }),
         }
     } else {
-        Ok(Statement::GiveSignature(GiveSignature { signature, literal }))
+        Ok(Statement::GiveSignature(GiveSignature {
+            signature,
+            literal,
+        }))
     }
 }
 
@@ -226,12 +215,8 @@ fn parse_give_function_statement(location: SourceLocation<'_>) -> ParseResult![S
     let location = location.trim_start();
     if !location.is_empty() {
         match literal {
-            FunctionLiteral::Explicit { .. } => {
-                Err(ParseError::ExpectedEndOfLine { location })
-            }
-            FunctionLiteral::Implicit(_) => {
-                Err(ParseError::ExpectedAsOrEndOfLine { location })
-            }
+            FunctionLiteral::Explicit { .. } => Err(ParseError::ExpectedEndOfLine { location }),
+            FunctionLiteral::Implicit(_) => Err(ParseError::ExpectedAsOrEndOfLine { location }),
         }
     } else {
         Ok(Statement::GiveFunction(GiveFunction { function, literal }))
@@ -257,11 +242,97 @@ fn parse_give_statement(location: SourceLocationLines<'_>) -> LinesParseResult![
     }
 }
 
+fn parse_equals(location: SourceLocation<'_>) -> LocationParseResult![] {
+    if let Some(rest) = location.strip_prefix("=") {
+        Ok(rest)
+    } else {
+        let location = location.truncate(1);
+        Err(ParseError::ExpectedEquals { location })
+    }
+}
+
+fn parse_signature_assignment_rhs<'s>(
+    location: SourceLocation<'s>,
+    following_lines: SourceLocationLines<'s>,
+    implicit_literal: Signature<'s>,
+) -> LinesParseResult!['s, SignatureAssignmentRhs] {
+    if let Some(location) = location.strip_prefix("conjure") {
+        let location = location.trim_start();
+        if !location.is_empty() {
+            return Err(ParseError::ExpectedEndOfLine { location });
+        }
+        let rhs = SignatureAssignmentRhs::Conjure(ConjureSignature {
+            phantom: PhantomData,
+        });
+        Ok((following_lines, rhs))
+    } else if let Some(location) = location.strip_prefix("define") {
+        let location = location.trim_start();
+        if !location.is_empty() {
+            return Err(ParseError::ExpectedEndOfLine { location });
+        }
+        let (following_lines, context) = parse_indented_context(following_lines)?;
+        let rhs = SignatureAssignmentRhs::Define(DefineSignature { context });
+        Ok((following_lines, rhs))
+    } else {
+        todo!()
+    }
+}
+
+fn parse_function_assignment_rhs<'s>(
+    location: SourceLocation<'s>,
+    following_lines: SourceLocationLines<'s>,
+    implicit_literal: Function<'s>,
+) -> LinesParseResult!['s, FunctionAssignmentRhs] {
+    todo!()
+}
+
+fn parse_signature_assignment_statement<'s>(
+    location: SourceLocation<'s>,
+    following_lines: SourceLocationLines<'s>,
+) -> LinesParseResult!['s, Statement] {
+    let (location, lhs) = parse_signature(location)?;
+    let location = location.trim_start();
+    let location = parse_equals(location)?;
+    let location = location.trim_start();
+    let (following_lines, rhs) = parse_signature_assignment_rhs(location, following_lines, lhs)?;
+    let statement = Statement::SignatureAssignment(SignatureAssignment { lhs, rhs });
+    Ok((following_lines, statement))
+}
+
+fn parse_function_assignment_statement<'s>(
+    location: SourceLocation<'s>,
+    following_lines: SourceLocationLines<'s>,
+) -> LinesParseResult!['s, Statement] {
+    let (location, lhs) = parse_function(location)?;
+    let location = location.trim_start();
+    let location = parse_equals(location)?;
+    let location = location.trim_start();
+    let (following_lines, rhs) = parse_function_assignment_rhs(location, following_lines, lhs)?;
+    let statement = Statement::FunctionAssignment(FunctionAssignment { lhs, rhs });
+    Ok((following_lines, statement))
+}
+
+fn parse_assignment_statement(location: SourceLocationLines<'_>) -> LinesParseResult![Statement] {
+    let line = location.first().expect("should not be empty");
+    let line = line.trim_start();
+
+    let location = location.advance().expect("should not be empty");
+    if line.starts_with('(') {
+        let (location, statement) = parse_signature_assignment_statement(line, location)?;
+        Ok((location, statement))
+    } else if line.starts_with(is_symbol_char) {
+        let (location, statement) = parse_function_assignment_statement(line, location)?;
+        Ok((location, statement))
+    } else {
+        Err(ParseError::ExpectedSignatureOrFunction { location: line })
+    }
+}
+
 fn is_symbol_char(char: char) -> bool {
     !char.is_whitespace() && char != '\'' && char != '(' && char != ')' && char != '='
 }
 
-fn parse_statement(mut location: SourceLocationLines<'_>) -> LinesParseResult![Statement] {
+fn parse_statement(location: SourceLocationLines<'_>) -> LinesParseResult![Statement] {
     let line = location.first().expect("should not be empty");
     // caller (parse_context) handled indentation, which we can safely trim away
     let line = line.trim_start();
@@ -269,10 +340,43 @@ fn parse_statement(mut location: SourceLocationLines<'_>) -> LinesParseResult![S
     if line.starts_with("give") {
         parse_give_statement(location)
     } else if line.starts_with('(') || line.starts_with(is_symbol_char) {
-        // parse_assignment_statement(source, line_index, indentation)
-        todo!()
+        parse_assignment_statement(location)
     } else {
-        Err(ParseError::ExpectedStatement { location: line })
+        Err(ParseError::ExpectedStatement {
+            location: line.trim(),
+        })
+    }
+}
+
+fn parse_indented_context(location: SourceLocationLines<'_>) -> LinesParseResult![Context] {
+    if let Some(location) = skip_empty_lines(location) {
+        let line = location.first().expect("should not be empty");
+
+        let indentation = line.take_while_whitespace();
+        if let Some(reference_indentation) = location.reference_indentation {
+            if indentation.starts_with(reference_indentation.as_str())
+                && indentation.as_str() != reference_indentation.as_str()
+            {
+                parse_context(location.with_reference_indentation(indentation))
+            } else {
+                // indentation has been reduced
+                //   => assume the next line is outside the context (one indentation level less)
+                //   => the indented context is empty
+                // or stayed the same
+                //   => the next line belongs to the current context
+                //   => the indented context is empty
+                Ok((location, Context(Vec::new())))
+            }
+        } else {
+            if !indentation.is_empty() {
+                parse_context(location.with_reference_indentation(indentation))
+            } else {
+                // indentation stayed the same
+                Ok((location, Context(Vec::new())))
+            }
+        }
+    } else {
+        Ok((location, Context(Vec::new())))
     }
 }
 
