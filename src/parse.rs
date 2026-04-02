@@ -2,6 +2,7 @@ use itertools::Itertools;
 use pest::iterators::Pair;
 use pest::Parser;
 use pest_derive::Parser;
+use std::marker::PhantomData;
 
 #[derive(Parser)]
 #[grammar = "syntax.pest"]
@@ -19,15 +20,6 @@ pub(crate) struct SignatureLiteral<'s>(pub(crate) &'s str);
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub(crate) struct FunctionLiteral<'s>(pub(crate) &'s str);
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub(crate) enum ConjureDependency<'s> {
-    Signature(Signature<'s>),
-    Function(Function<'s>),
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) struct ConjureDependencies<'s>(pub(crate) Vec<ConjureDependency<'s>>);
-
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct TakeSignature<'s> {
     pub(crate) literal: SignatureLiteral<'s>,
@@ -35,7 +27,7 @@ pub(crate) struct TakeSignature<'s> {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ConjureSignature<'s> {
-    pub(crate) dependencies: ConjureDependencies<'s>,
+    pub(crate) phantom: PhantomData<&'s str>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -88,7 +80,6 @@ pub(crate) struct TakeFunction<'s> {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ConjureFunction<'s> {
     pub(crate) signature: Signature<'s>,
-    pub(crate) dependencies: ConjureDependencies<'s>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -191,24 +182,6 @@ fn parse_maybe_function_literal<'s>(pair: Pair<'s, Rule>, default: &'s str) -> F
     }
 }
 
-fn parse_conjure_dependency(pair: Pair<Rule>) -> ConjureDependency {
-    let rule = pair.as_rule();
-    let (symbol,) = pair.into_inner().collect_tuple().unwrap();
-    match rule {
-        Rule::signature => ConjureDependency::Signature(Signature(symbol.as_str())),
-        Rule::function => ConjureDependency::Function(Function(symbol.as_str())),
-        _ => unreachable!(),
-    }
-}
-
-fn parse_conjure_dependencies(pair: Pair<Rule>) -> ConjureDependencies {
-    let dependencies = pair
-        .into_inner()
-        .map(|dependency| parse_conjure_dependency(dependency))
-        .collect();
-    ConjureDependencies(dependencies)
-}
-
 fn parse_take_signature<'s>(pair: Pair<'s, Rule>, default_literal: &'s str) -> TakeSignature<'s> {
     let (literal,) = pair.into_inner().collect_tuple().unwrap();
     TakeSignature {
@@ -217,9 +190,9 @@ fn parse_take_signature<'s>(pair: Pair<'s, Rule>, default_literal: &'s str) -> T
 }
 
 fn parse_conjure_signature(pair: Pair<Rule>) -> ConjureSignature {
-    let (dependencies,) = pair.into_inner().collect_tuple().unwrap();
+    _ = pair;
     ConjureSignature {
-        dependencies: parse_conjure_dependencies(dependencies),
+        phantom: PhantomData
     }
 }
 
@@ -267,10 +240,9 @@ fn parse_take_function<'s>(pair: Pair<'s, Rule>, default_literal: &'s str) -> Ta
 }
 
 fn parse_conjure_function(pair: Pair<Rule>) -> ConjureFunction {
-    let (signature, dependencies) = pair.into_inner().collect_tuple().unwrap();
+    let (signature, ) = pair.into_inner().collect_tuple().unwrap();
     ConjureFunction {
         signature: parse_signature(signature),
-        dependencies: parse_conjure_dependencies(dependencies),
     }
 }
 

@@ -36,10 +36,7 @@ pub(crate) enum SignatureAssignmentRhs {
     Take {
         literal: SignatureLiteralId,
     },
-    Conjure {
-        signature_dependencies: Vec<SignatureId>,
-        function_dependencies: Vec<FunctionId>,
-    },
+    Conjure,
     Define {
         context: ContextId,
     },
@@ -67,8 +64,6 @@ pub(crate) enum FunctionAssignmentRhs {
     },
     Conjure {
         signature: SignatureId,
-        signature_dependencies: Vec<SignatureId>,
-        function_dependencies: Vec<FunctionId>,
     },
     Define {
         context: ContextId,
@@ -179,38 +174,6 @@ impl<'s, 'i: 's, 'p> ResolveNames<'s> for DeepResolver<'s, 'i, 'p> {
     }
 }
 
-fn resolve_conjure_dependencies<'s>(
-    resolver: &impl ResolveNames<'s>,
-    conjure_dependencies: parse::ConjureDependencies<'s>,
-) -> (Vec<SignatureId>, Vec<FunctionId>) {
-    let (signatures, functions): (Vec<_>, Vec<_>) =
-        conjure_dependencies
-            .0
-            .into_iter()
-            .partition(|conjure_dependency| {
-                matches!(conjure_dependency, parse::ConjureDependency::Signature(_))
-            });
-    let signatures = signatures
-        .into_iter()
-        .map(|conjure_dependency| {
-            let parse::ConjureDependency::Signature(signature) = conjure_dependency else {
-                unreachable!()
-            };
-            resolver.resolve_signature_unwrap(signature.0)
-        })
-        .collect();
-    let functions = functions
-        .into_iter()
-        .map(|conjure_dependency| {
-            let parse::ConjureDependency::Function(function) = conjure_dependency else {
-                unreachable!()
-            };
-            resolver.resolve_function_unwrap(function.0)
-        })
-        .collect();
-    (signatures, functions)
-}
-
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct Model<'s> {
     signature_literal_names: HashMap<SignatureLiteralId, &'s str>,
@@ -310,15 +273,9 @@ impl<'s> Model<'s> {
                             SignatureAssignmentRhs::Take { literal }
                         }
                         parse::SignatureAssignmentRhs::Conjure(conjure_signature) => {
-                            let (signature_dependencies, function_dependencies) =
-                                resolve_conjure_dependencies(
-                                    &self.deep_resolver(path),
-                                    conjure_signature.dependencies,
-                                );
-                            SignatureAssignmentRhs::Conjure {
-                                signature_dependencies,
-                                function_dependencies,
-                            }
+                            // only contains phantom data for lifetime
+                            _ = conjure_signature.phantom;
+                            SignatureAssignmentRhs::Conjure
                         }
                         parse::SignatureAssignmentRhs::Define(define_signature) => {
                             let define_context = ContextId::generate();
@@ -390,15 +347,8 @@ impl<'s> Model<'s> {
                             let signature = self
                                 .deep_resolver(path)
                                 .resolve_signature_unwrap(conjure_function.signature.0);
-                            let (signature_dependencies, function_dependencies) =
-                                resolve_conjure_dependencies(
-                                    &self.deep_resolver(path),
-                                    conjure_function.dependencies,
-                                );
                             FunctionAssignmentRhs::Conjure {
                                 signature,
-                                signature_dependencies,
-                                function_dependencies,
                             }
                         }
                         parse::FunctionAssignmentRhs::Define(define_function) => {

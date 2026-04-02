@@ -32,8 +32,6 @@ enum SignatureValue {
     },
     Conjure {
         marker: ConjureSignatureMarker,
-        signature_dependencies: Vec<SignatureValue>,
-        function_dependencies: Vec<FunctionValue>,
     },
     Define {
         context: Box<ContextValue>,
@@ -63,8 +61,6 @@ enum FunctionValue {
     Conjure {
         marker: ConjureFunctionMarker,
         signature: Box<SignatureValue>,
-        signature_dependencies: Vec<SignatureValue>,
-        function_dependencies: Vec<FunctionValue>,
     },
     Define {
         context: Box<ContextValue>,
@@ -121,16 +117,8 @@ impl SignatureValue {
             }
             SignatureValue::Conjure {
                 marker,
-                signature_dependencies,
-                function_dependencies,
             } => {
                 _ = marker;
-                for dependency in signature_dependencies {
-                    dependency.substitute_taken_signature(id, value);
-                }
-                for dependency in function_dependencies {
-                    dependency.substitute_taken_signature(id, value);
-                }
             }
             SignatureValue::Define { context } => {
                 context.substitute_taken_signature(id, value);
@@ -167,16 +155,8 @@ impl SignatureValue {
             }
             SignatureValue::Conjure {
                 marker,
-                signature_dependencies,
-                function_dependencies,
             } => {
                 _ = marker;
-                for dependency in signature_dependencies {
-                    dependency.substitute_taken_function(id, value);
-                }
-                for dependency in function_dependencies {
-                    dependency.substitute_taken_function(id, value);
-                }
             }
             SignatureValue::Define { context } => {
                 context.substitute_taken_function(id, value);
@@ -217,17 +197,9 @@ impl FunctionValue {
             FunctionValue::Conjure {
                 marker,
                 signature,
-                signature_dependencies,
-                function_dependencies,
             } => {
                 _ = marker;
                 signature.substitute_taken_signature(id, value);
-                for dependency in signature_dependencies {
-                    dependency.substitute_taken_signature(id, value);
-                }
-                for dependency in function_dependencies {
-                    dependency.substitute_taken_signature(id, value);
-                }
             }
             FunctionValue::Define { context } => {
                 context.substitute_taken_signature(id, value);
@@ -268,17 +240,9 @@ impl FunctionValue {
             FunctionValue::Conjure {
                 marker,
                 signature,
-                signature_dependencies,
-                function_dependencies,
             } => {
                 _ = marker;
                 signature.substitute_taken_function(id, value);
-                for dependency in signature_dependencies {
-                    dependency.substitute_taken_function(id, value);
-                }
-                for dependency in function_dependencies {
-                    dependency.substitute_taken_function(id, value);
-                }
             }
             FunctionValue::Define { context } => {
                 context.substitute_taken_function(id, value);
@@ -337,8 +301,6 @@ impl SignatureValue {
             }
             SignatureValue::Conjure {
                 marker,
-                signature_dependencies,
-                function_dependencies,
             } => {
                 let ConjureSignatureMarker::Id(id) = marker else {
                     // shouldn't be enumerated yet
@@ -353,13 +315,6 @@ impl SignatureValue {
                         *marker = ConjureSignatureMarker::Index(next_index);
                         entry.insert(next_index);
                     }
-                }
-
-                for dependency in signature_dependencies {
-                    dependency.enumerate_conjurations(signature_enumeration, function_enumeration);
-                }
-                for dependency in function_dependencies {
-                    dependency.enumerate_conjurations(signature_enumeration, function_enumeration);
                 }
             }
             SignatureValue::Define { context } => {
@@ -406,8 +361,6 @@ impl FunctionValue {
             FunctionValue::Conjure {
                 marker,
                 signature,
-                signature_dependencies,
-                function_dependencies,
             } => {
                 let ConjureFunctionMarker::Id(id) = marker else {
                     // shouldn't be enumerated yet
@@ -425,12 +378,6 @@ impl FunctionValue {
                 }
 
                 signature.enumerate_conjurations(signature_enumeration, function_enumeration);
-                for dependency in signature_dependencies {
-                    dependency.enumerate_conjurations(signature_enumeration, function_enumeration);
-                }
-                for dependency in function_dependencies {
-                    dependency.enumerate_conjurations(signature_enumeration, function_enumeration);
-                }
             }
             FunctionValue::Define { context } => {
                 context.enumerate_conjurations(signature_enumeration, function_enumeration);
@@ -480,16 +427,8 @@ impl SignatureValue {
             }
             SignatureValue::Conjure {
                 marker,
-                signature_dependencies,
-                function_dependencies,
             } => {
                 _ = marker;
-                for dependency in signature_dependencies {
-                    dependency.reduce();
-                }
-                for dependency in function_dependencies {
-                    dependency.reduce();
-                }
             }
             SignatureValue::Define { context } => {
                 context.reduce();
@@ -563,17 +502,9 @@ impl FunctionValue {
             FunctionValue::Conjure {
                 marker,
                 signature,
-                signature_dependencies,
-                function_dependencies,
             } => {
                 _ = marker;
                 signature.reduce();
-                for dependency in signature_dependencies {
-                    dependency.reduce();
-                }
-                for dependency in function_dependencies {
-                    dependency.reduce();
-                }
             }
             FunctionValue::Define { context } => {
                 context.reduce();
@@ -718,19 +649,8 @@ impl<'s> Model<'s> {
                         SignatureAssignmentRhs::Take { literal } => {
                             SignatureValue::Take { literal }
                         }
-                        SignatureAssignmentRhs::Conjure {
-                            ref signature_dependencies,
-                            ref function_dependencies,
-                        } => SignatureValue::Conjure {
+                        SignatureAssignmentRhs::Conjure => SignatureValue::Conjure {
                             marker: ConjureSignatureMarker::Id(lhs),
-                            signature_dependencies: signature_dependencies
-                                .iter()
-                                .map(|&signature| values.signature[&signature].clone())
-                                .collect(),
-                            function_dependencies: function_dependencies
-                                .iter()
-                                .map(|&function| values.function[&function].clone())
-                                .collect(),
                         },
                         SignatureAssignmentRhs::Define { context } => {
                             self.check_context(context, values);
@@ -774,19 +694,9 @@ impl<'s> Model<'s> {
                         },
                         FunctionAssignmentRhs::Conjure {
                             signature,
-                            ref signature_dependencies,
-                            ref function_dependencies,
                         } => FunctionValue::Conjure {
                             signature: Box::new(values.signature[&signature].clone()),
                             marker: ConjureFunctionMarker::Id(lhs),
-                            signature_dependencies: signature_dependencies
-                                .iter()
-                                .map(|&signature| values.signature[&signature].clone())
-                                .collect(),
-                            function_dependencies: function_dependencies
-                                .iter()
-                                .map(|&function| values.function[&function].clone())
-                                .collect(),
                         },
                         FunctionAssignmentRhs::Define { context } => {
                             self.check_context(context, values);
@@ -939,26 +849,10 @@ impl<'s> Model<'s> {
                 .finish(),
             SignatureValue::Conjure {
                 marker,
-                ref signature_dependencies,
-                ref function_dependencies,
             } => fmt
                 .debug_struct("ConjureSignature")
                 .field_with("marker", |fmt| {
                     self.debug_conjure_signature_marker(fmt, marker)
-                })
-                .field_with("signature_dependencies", |fmt| {
-                    let mut fmt = fmt.debug_list();
-                    for value in signature_dependencies {
-                        fmt.entry_with(|fmt| self.debug_signature_value(fmt, value));
-                    }
-                    fmt.finish()
-                })
-                .field_with("function_dependencies", |fmt| {
-                    let mut fmt = fmt.debug_list();
-                    for value in function_dependencies {
-                        fmt.entry_with(|fmt| self.debug_function_value(fmt, value));
-                    }
-                    fmt.finish()
                 })
                 .finish(),
             SignatureValue::Define { ref context } => fmt
@@ -1009,28 +903,12 @@ impl<'s> Model<'s> {
             FunctionValue::Conjure {
                 marker,
                 ref signature,
-                ref signature_dependencies,
-                ref function_dependencies,
             } => fmt
                 .debug_struct("ConjureFunction")
                 .field_with("marker", |fmt| {
                     self.debug_conjure_function_marker(fmt, marker)
                 })
                 .field_with("signature", |fmt| self.debug_signature_value(fmt, &*signature))
-                .field_with("signature_dependencies", |fmt| {
-                    let mut fmt = fmt.debug_list();
-                    for value in signature_dependencies {
-                        fmt.entry_with(|fmt| self.debug_signature_value(fmt, value));
-                    }
-                    fmt.finish()
-                })
-                .field_with("function_dependencies", |fmt| {
-                    let mut fmt = fmt.debug_list();
-                    for value in function_dependencies {
-                        fmt.entry_with(|fmt| self.debug_function_value(fmt, value));
-                    }
-                    fmt.finish()
-                })
                 .finish(),
             FunctionValue::Define { ref context } => fmt
                 .debug_struct("DefineFunction")
