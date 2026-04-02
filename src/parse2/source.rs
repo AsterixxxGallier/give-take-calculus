@@ -1,31 +1,25 @@
-use std::fmt::{Debug, Formatter};
+use crate::parse2::SourceLocation;
+use std::ops::Range;
 
+#[derive(Debug, Eq, PartialEq)]
 pub(crate) struct Source<'s> {
-    pub(super) file_name: String,
-    pub(super) text: &'s str,
-    pub(super) lines: Vec<&'s str>,
+    pub(crate) file_name: String,
+    pub(crate) inner: ariadne::Source<&'s str>,
 }
 
 impl<'s> Source<'s> {
     pub(crate) fn new(file_name: &str, text: &'s str) -> Self {
         Self {
             file_name: file_name.to_owned(),
-            text,
-            lines: text.lines().collect(),
+            inner: ariadne::Source::from(text),
         }
     }
-}
 
-impl<'s> Debug for Source<'s> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.file_name)
+    pub(super) fn location(&'s self, line: usize, columns: Range<usize>) -> SourceLocation<'s> {
+        SourceLocation::new(self, line, columns)
+    }
+
+    pub(super) fn full_line(&'s self, line: usize) -> SourceLocation<'s> {
+        SourceLocation::full_line(self, line)
     }
 }
-
-impl<'s> PartialEq for Source<'s> {
-    fn eq(&self, other: &Self) -> bool {
-        self.file_name == other.file_name
-    }
-}
-
-impl<'s> Eq for Source<'s> {}

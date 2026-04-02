@@ -1,16 +1,17 @@
 #![allow(unused)]
 
+use std::fmt::Debug;
+use std::str::pattern::{DoubleEndedSearcher, Pattern, ReverseSearcher, Searcher};
+
+mod error;
+mod source;
+mod source_location;
+mod syntax_tree;
+
 pub(crate) use error::*;
 pub(crate) use source::*;
 pub(crate) use source_location::*;
-use std::fmt::Debug;
-use std::str::pattern::{DoubleEndedSearcher, Pattern, ReverseSearcher, Searcher};
 pub(crate) use syntax_tree::*;
-
-mod source;
-mod syntax_tree;
-mod source_location;
-mod error;
 
 #[allow(non_snake_case, reason = "used in type position")]
 macro_rules! ParseResult {
@@ -33,12 +34,12 @@ pub(crate) fn parse_file<'s>(source: &'s Source<'s>) -> ParseResult!['s, Context
 /// then `line_index` is the index of the next non-empty line. Else, it is `source.lines.len()`.
 fn skip_empty_lines<'s>(source: &'s Source<'s>, line_index: &mut usize) -> bool {
     loop {
-        let line = source.lines[*line_index];
+        let line = source.full_line(*line_index);
         // remove leading whitespace
         let line = line.trim_start();
         // only whitespace or comment
         let line_is_empty = line.is_empty() || line.starts_with("#");
-        let line_is_last = *line_index == source.lines.len();
+        let line_is_last = *line_index == source.inner.lines().len();
         if line_is_last {
             break false;
         } else if !line_is_empty {
@@ -62,7 +63,7 @@ fn parse_as(location: SourceLocation<'_>) -> LocationParseResult![] {
 fn parse_symbol(location: SourceLocation<'_>) -> LocationParseResult![SourceLocation] {
     let (symbol, location) = location.partition(is_symbol_char);
     if symbol.is_empty() {
-        let location = location.truncate_to_word();
+        let location = location.take_until_whitespace();
         Err(ParseError::ExpectedSignatureOrFunction { location })
     } else {
         Ok((location, symbol))
@@ -91,7 +92,7 @@ fn parse_signature(location: SourceLocation<'_>) -> LocationParseResult![Signatu
             Err(other) => Err(other),
         }
     } else {
-        let location = location.truncate_to_word();
+        let location = location.take_until_whitespace();
         Err(ParseError::ExpectedSignature { location })
     }
 }
@@ -119,7 +120,7 @@ fn parse_signature_literal(location: SourceLocation<'_>) -> LocationParseResult!
             Err(other) => Err(other),
         }
     } else {
-        let location = location.truncate_to_word();
+        let location = location.take_until_whitespace();
         Err(ParseError::ExpectedSignatureLiteral { location })
     }
 }
@@ -141,7 +142,7 @@ fn parse_give_statement<'s>(
     source: &'s Source<'s>,
     line_index: &'_ mut usize,
 ) -> ParseResult!['s, Statement] {
-    let location = SourceLocation::full_line(source, *line_index);
+    let location = source.full_line(*line_index);
     let location = location.trim();
     let location = location
         .strip_prefix("give")
@@ -163,6 +164,7 @@ fn parse_give_statement<'s>(
                 }
             }
         } else {
+            *line_index += 1;
             Ok(Statement::GiveSignature(GiveSignature {
                 signature,
                 literal,
@@ -186,7 +188,7 @@ fn parse_statement<'s>(
 ) -> ParseResult!['s, Statement] {
     // caller checked indentation
 
-    let location = SourceLocation::full_line(source, *line_index);
+    let location = source.full_line(*line_index);
     let location = location.trim();
     let line = location.as_str();
 
@@ -210,12 +212,9 @@ fn parse_context<'s>(
     if skip_empty_lines(source, line_index) {
         // Use first non-empty line indentation as indentation for context.
 
-        let line = source.lines[*line_index];
+        let line = source.full_line(*line_index);
 
-        let indentation_chars = line
-            .find(|char: char| !char.is_whitespace())
-            .expect("line_index should be the index of a non-empty line");
-        let new_indentation = SourceLocation::new(source, *line_index, 0..indentation_chars);
+        let new_indentation = line.take_while_whitespace();
 
         if let Some(indentation) = indentation {
             if !line.starts_with(indentation.as_str()) {
@@ -233,7 +232,7 @@ fn parse_context<'s>(
         }
 
         loop {
-            let line = source.lines[*line_index];
+            let line = source.full_line(*line_index);
             if !line.starts_with(new_indentation.as_str()) {
                 // context indentation does not apply for this line
                 // => assume the next line is outside the context (one indentation level less)

@@ -37,7 +37,7 @@ fn truncate_to_word() {
     let source = Source::new("foo.txt", "hello foo bar");
     let full_line = SourceLocation::full_line(&source, 0);
     let hello = SourceLocation::new(&source, 0, 0..5);
-    assert_eq!(full_line.truncate_to_word(), hello);
+    assert_eq!(full_line.take_until_whitespace(), hello);
 }
 
 #[test]
