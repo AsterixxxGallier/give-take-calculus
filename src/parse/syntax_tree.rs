@@ -1,5 +1,4 @@
 use crate::parse::SourceLocation;
-use std::marker::PhantomData;
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct Signature<'s> {
@@ -34,6 +33,15 @@ pub(crate) enum FunctionLiteral<'s> {
     Implicit(Function<'s>),
 }
 
+#[derive(Debug, Copy, Clone)]
+pub(crate) enum ConjureDependency<'s> {
+    Signature(Signature<'s>),
+    Function(Function<'s>),
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ConjureDependencies<'s>(pub(crate) Vec<ConjureDependency<'s>>);
+
 #[derive(Debug, Clone)]
 pub(crate) struct TakeSignature<'s> {
     pub(crate) literal: SignatureLiteral<'s>,
@@ -41,7 +49,7 @@ pub(crate) struct TakeSignature<'s> {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ConjureSignature<'s> {
-    pub(crate) phantom: PhantomData<SourceLocation<'s>>,
+    pub(crate) dependencies: ConjureDependencies<'s>,
 }
 
 #[derive(Debug, Clone)]
@@ -94,6 +102,7 @@ pub(crate) struct TakeFunction<'s> {
 #[derive(Debug, Clone)]
 pub(crate) struct ConjureFunction<'s> {
     pub(crate) signature: Signature<'s>,
+    pub(crate) dependencies: ConjureDependencies<'s>,
 }
 
 #[derive(Debug, Clone)]

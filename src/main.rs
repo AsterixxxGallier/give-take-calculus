@@ -1,4 +1,4 @@
-#![feature(debug_closure_helpers)]
+// #![feature(debug_closure_helpers)]
 #![feature(pattern)]
 
 use crate::model::Model;
@@ -17,7 +17,8 @@ fn main() {
             // println!("{:#?}", context);
 
             let model = Model::build(context);
-            model.check();
+            // model.check();
+            _ = model;
         }
         Err(error) => {
             error.report().eprint((path.to_owned(), &source.inner)).unwrap();

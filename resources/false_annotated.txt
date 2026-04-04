@@ -5,13 +5,111 @@
   q = conjure (q) using p
   give q
 
+# (implies) = KnownSignatureValue {
+#     context: ContextValue {
+#         taken_signatures: ['(p)', '(q)'],
+#         taken_functions: ['p' => '(p)'],
+#         given_signatures: [],
+#         given_functions: [
+#             q => UnknownFunctionValue::ConjuredInThisSignature {
+#                 marker: q,
+#                 signature_dependencies: [],
+#                 function_dependencies: ['p'],
+#                 signature: UnknownSignatureValue::Taken {
+#                     literal: '(q)',
+#                 },
+#             },
+#         ],
+#     }
+# }
+
 (iff) = define
   (p) = take
   (q) = take
+
+  # (p) = UnknownSignatureValue::Taken { literal: '(p)' }
+  # (q) = UnknownSignatureValue::Taken { literal: '(q)' }
+
   (p_implies) = give (p) to (implies)
+
+  # (p_implies) = KnownSignatureValue {
+  #     context: ContextValue {
+  #         taken_signatures: ['(q)'],
+  #         taken_functions: ['p' => '(p)'],
+  #         given_signatures: [],
+  #         given_functions: [
+  #             q => UnknownFunctionValue::ConjuredInThisSignature {
+  #                 marker: q,
+  #                 signature_dependencies: [],
+  #                 function_dependencies: ['p'],
+  #                 signature: UnknownSignatureValue::Taken {
+  #                     literal: '(q)',
+  #                 },
+  #             },
+  #         ],
+  #     }
+  # }
+
   (p_q) = give (q) to (p_implies)
+
+  # (p_q) = KnownSignatureValue {
+  #     context: ContextValue {
+  #         taken_signatures: [],
+  #         taken_functions: ['p' => '(p)'],
+  #         given_signatures: [],
+  #         given_functions: [
+  #             q => UnknownFunctionValue::ConjuredInThisSignature {
+  #                 marker: q,
+  #                 signature_dependencies: [],
+  #                 function_dependencies: [],
+  #                 signature: UnknownSignatureValue::Taken {
+  #                     literal: '(q)',
+  #                 },
+  #             },
+  #         ],
+  #     }
+  # }
+
   (q_implies) = give (q) as '(p)' to (implies)
+
+  # (q_implies) = KnownSignatureValue {
+  #     context: ContextValue {
+  #         taken_signatures: ['(q)'],
+  #         taken_functions: ['p' => '(q)'],
+  #         given_signatures: [],
+  #         given_functions: [
+  #             q => UnknownFunctionValue::ConjuredInThisSignature {
+  #                 marker: q,
+  #                 signature_dependencies: [],
+  #                 function_dependencies: ['p'],
+  #                 signature: UnknownSignatureValue::Taken {
+  #                     literal: '(q)',
+  #                 },
+  #             },
+  #         ],
+  #     }
+  # }
+
   (q_p) = give (p) as '(q)' to (q_implies)
+
+  # (q_implies) = KnownSignatureValue {
+  #     context: ContextValue {
+  #         taken_signatures: ['(q)'],
+  #         taken_functions: ['p' => '(q)'],
+  #         given_signatures: [],
+  #         given_functions: [
+  #             q => UnknownFunctionValue::ConjuredInThisSignature {
+  #                 marker: q,
+  #                 signature_dependencies: [],
+  #                 function_dependencies: ['p'],
+  #                 signature: UnknownSignatureValue::Taken {
+  #                     literal: '(q)',
+  #                 },
+  #             },
+  #         ],
+  #     }
+  # }
+
   p_q = conjure (p_q)
   q_p = conjure (q_p)
   give p_q
@@ -25,7 +123,7 @@
 (not) = define
   (p) = take
   p = take (p)
-  false = conjure (false) using p
+  false = conjure (false)
   give false
 
 not_apply = define
@@ -37,64 +135,16 @@ not_apply = define
   false = take from not_p_but_p
   give false
 
-not_apply = define
+(not_not) = define
   (p) = take
+  (not_p) = give (p) to (not)
+  (not_not_p) = give (not_p) as '(p)' to (not)
+  not_not_p = take (not_not_p)
+  p = conjure (p)
+  give p
 
-  not_p = take {
-    (define)
-      p = take { take '(p)' }
-      false = conjure (false) using p
-      give false
-  }
-  p = take { take '(p)' }
+# axiom
+not_not = take (not_not)
 
-  # not_p_but_p = give p to not_p
-  not_p_but_p =
-    give {
-      take { take '(p)' } 'p'
-    } as 'p' to {
-      take {
-        (define)
-          p = take { take '(p)' }
-          false = conjure (false) using p
-          give false
-      } 'not_p'
-    }
-  # reduced
-  not_p_but_p =
-    take {
-      (define)
-        p = take { take '(p)' }
-        false = conjure (false) using p
-        give false
-    } 'not_p'
-
-
-  not_p_but_p =
-    give {
-      take { take '(p)' } 'p'
-    } as 'p' to {
-      take-with-signature 'not_p'
-        p = take { take '(p)' }
-        false = conjure (false) using p
-        give false
-    }
-  # reduced
-  not_p_but_p =
-    take-with-signature 'not_p'
-      give { conjure (false) using { take { take '(p)' } 'p' } } as 'false'
-
-  # false = take from not_p_but_p
-  false = take from {
-    take-with-signature 'not_p'
-      give { conjure (false) using { take { take '(p)' } 'p' } } as 'false'
-  }
-  # reduced
-  false = take from {
-    define
-      give { conjure-from-taken-function 'not_p' (false) using { take { take '(p)' } 'p' } } as 'false'
-  }
-  # reduced
-  false = conjure-from-taken-function 'not_p' (false) using { take { take '(p)' } 'p' }
-
-  give false
+give (iff)
+give not_apply

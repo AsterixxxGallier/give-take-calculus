@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 mod error;
 mod source;
 mod source_location;
@@ -107,6 +105,40 @@ fn parse_function(location: SourceLocation<'_>) -> LocationParseResult![Function
             Err(ParseError::ExpectedFunction { location })
         }
         Err(other) => Err(other),
+    }
+}
+
+fn parse_conjure_dependency(
+    location: SourceLocation<'_>,
+) -> LocationParseResult![ConjureDependency] {
+    if location.starts_with('(') {
+        let (location, signature) = parse_signature(location)?;
+        Ok((location, ConjureDependency::Signature(signature)))
+    } else if location.starts_with(is_symbol_char) {
+        let (location, function) = parse_function(location)?;
+        Ok((location, ConjureDependency::Function(function)))
+    } else {
+        let location = location.take_until_whitespace();
+        Err(ParseError::ExpectedSignatureOrFunction { location })
+    }
+}
+
+fn parse_conjure_dependencies(
+    location: SourceLocation<'_>,
+) -> LocationParseResult![ConjureDependencies] {
+    if let Some(location) = location.strip_prefix("using") {
+        let location = location.trim_start();
+        let (mut location, first) = parse_conjure_dependency(location)?;
+        let mut dependencies = vec![first];
+        while !location.trim_start().is_empty() {
+            location = location.trim_start();
+            let (new_location, next) = parse_conjure_dependency(location)?;
+            location = new_location;
+            dependencies.push(next);
+        }
+        Ok((location, ConjureDependencies(dependencies)))
+    } else {
+        Ok((location, ConjureDependencies(Vec::new())))
     }
 }
 
@@ -278,12 +310,15 @@ fn parse_equals(location: SourceLocation<'_>) -> LocationParseResult![] {
 
 /// location should not include the keyword and the whitespace that follows
 fn parse_conjure_signature(location: SourceLocation<'_>) -> ParseResult![SignatureAssignmentRhs] {
+    let (location, dependencies) = parse_conjure_dependencies(location)?;
     if !location.is_empty() {
-        return Err(ParseError::ExpectedEndOfLine { location });
+        return if dependencies.0.is_empty() {
+            Err(ParseError::ExpectedUsingOrEndOfLine { location })
+        } else {
+            Err(ParseError::ExpectedEndOfLine { location })
+        };
     }
-    let rhs = SignatureAssignmentRhs::Conjure(ConjureSignature {
-        phantom: PhantomData,
-    });
+    let rhs = SignatureAssignmentRhs::Conjure(ConjureSignature { dependencies });
     Ok(rhs)
 }
 
@@ -426,10 +461,15 @@ fn parse_signature_assignment_rhs<'s>(
 /// location should not include the keyword and the whitespace that follows
 fn parse_conjure_function(location: SourceLocation<'_>) -> ParseResult![FunctionAssignmentRhs] {
     let (location, signature) = parse_signature(location)?;
+    let (location, dependencies) = parse_conjure_dependencies(location)?;
     if !location.is_empty() {
-        return Err(ParseError::ExpectedEndOfLine { location });
+        return if dependencies.0.is_empty() {
+            Err(ParseError::ExpectedUsingOrEndOfLine { location })
+        } else {
+            Err(ParseError::ExpectedEndOfLine { location })
+        };
     }
-    let rhs = FunctionAssignmentRhs::Conjure(ConjureFunction { signature });
+    let rhs = FunctionAssignmentRhs::Conjure(ConjureFunction { signature, dependencies });
     Ok(rhs)
 }
 
@@ -478,9 +518,9 @@ fn parse_take_function_or_take_function_from<'s>(
                 FunctionLiteral::Explicit { .. } => {
                     Err(ParseError::ExpectedFromOrSignature { location })
                 }
-                FunctionLiteral::Implicit(_) => Err(
-                    ParseError::ExpectedFromOrSignatureOrFunctionLiteral { location },
-                ),
+                FunctionLiteral::Implicit(_) => {
+                    Err(ParseError::ExpectedFromOrSignatureOrFunctionLiteral { location })
+                }
             }
         }
     }
@@ -498,12 +538,11 @@ fn parse_give_to_function(location: SourceLocation<'_>) -> ParseResult![Function
             let (location, source) = parse_function(location)?;
             let location = location.trim_start();
             if location.is_empty() {
-                let rhs =
-                    FunctionAssignmentRhs::GiveSignatureToFunction(GiveSignatureToFunction {
-                        signature,
-                        literal,
-                        source,
-                    });
+                let rhs = FunctionAssignmentRhs::GiveSignatureToFunction(GiveSignatureToFunction {
+                    signature,
+                    literal,
+                    source,
+                });
                 Ok(rhs)
             } else {
                 Err(ParseError::ExpectedEndOfLine { location })
@@ -526,12 +565,11 @@ fn parse_give_to_function(location: SourceLocation<'_>) -> ParseResult![Function
             let (location, source) = parse_function(location)?;
             let location = location.trim_start();
             if location.is_empty() {
-                let rhs =
-                    FunctionAssignmentRhs::GiveFunctionToFunction(GiveFunctionToFunction {
-                        function,
-                        literal,
-                        source,
-                    });
+                let rhs = FunctionAssignmentRhs::GiveFunctionToFunction(GiveFunctionToFunction {
+                    function,
+                    literal,
+                    source,
+                });
                 Ok(rhs)
             } else {
                 Err(ParseError::ExpectedEndOfLine { location })
@@ -649,7 +687,8 @@ fn parse_indented_context(location: SourceLocationLines<'_>) -> LinesParseResult
                 && indentation.as_str() != reference_indentation.as_str()
             {
                 let old_reference_indentation = location.reference_indentation;
-                let (mut location, context) = parse_context(location.with_reference_indentation(indentation))?;
+                let (mut location, context) =
+                    parse_context(location.with_reference_indentation(indentation))?;
                 location.reference_indentation = old_reference_indentation;
                 Ok((location, context))
             } else {
@@ -664,7 +703,8 @@ fn parse_indented_context(location: SourceLocationLines<'_>) -> LinesParseResult
         } else {
             if !indentation.is_empty() {
                 let old_reference_indentation = location.reference_indentation;
-                let (mut location, context) = parse_context(location.with_reference_indentation(indentation))?;
+                let (mut location, context) =
+                    parse_context(location.with_reference_indentation(indentation))?;
                 location.reference_indentation = old_reference_indentation;
                 Ok((location, context))
             } else {

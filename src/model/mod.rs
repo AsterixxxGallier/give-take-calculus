@@ -3,7 +3,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-mod check;
+// mod check;
 mod id;
 
 macro_rules! id {
@@ -31,12 +31,20 @@ id!(FunctionId);
 id!(SignatureLiteralId);
 id!(FunctionLiteralId);
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub(crate) enum ConjureDependency {
+    Signature(SignatureId),
+    Function(FunctionId),
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum SignatureAssignmentRhs {
     Take {
         literal: SignatureLiteralId,
     },
-    Conjure,
+    Conjure {
+        dependencies: Vec<ConjureDependency>,
+    },
     Define {
         context: ContextId,
     },
@@ -64,6 +72,7 @@ pub(crate) enum FunctionAssignmentRhs {
     },
     Conjure {
         signature: SignatureId,
+        dependencies: Vec<ConjureDependency>,
     },
     Define {
         context: ContextId,
@@ -174,6 +183,24 @@ impl<'s, 'm: 's, 'p> ResolveNames<'s> for DeepResolver<'s, 'm, 'p> {
     }
 }
 
+fn resolve_conjure_dependencies<'s>(
+    resolver: &impl ResolveNames<'s>,
+    dependencies: parse::ConjureDependencies<'s>,
+) -> Vec<ConjureDependency> {
+    dependencies
+        .0
+        .into_iter()
+        .map(|dependency| match dependency {
+            parse::ConjureDependency::Signature(signature) => {
+                ConjureDependency::Signature(resolver.resolve_signature_unwrap(signature.as_str()))
+            }
+            parse::ConjureDependency::Function(function) => {
+                ConjureDependency::Function(resolver.resolve_function_unwrap(function.as_str()))
+            }
+        })
+        .collect()
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct Model<'s> {
     signature_literal_names: HashMap<SignatureLiteralId, &'s str>,
@@ -270,9 +297,13 @@ impl<'s> Model<'s> {
                             SignatureAssignmentRhs::Take { literal }
                         }
                         parse::SignatureAssignmentRhs::Conjure(conjure_signature) => {
-                            // only contains phantom data for lifetime
-                            _ = conjure_signature.phantom;
-                            SignatureAssignmentRhs::Conjure
+                            let contents = &self.context_contents[&context];
+                            SignatureAssignmentRhs::Conjure {
+                                dependencies: resolve_conjure_dependencies(
+                                    contents,
+                                    conjure_signature.dependencies,
+                                ),
+                            }
                         }
                         parse::SignatureAssignmentRhs::Define(define_signature) => {
                             let define_context = ContextId::generate();
@@ -350,7 +381,14 @@ impl<'s> Model<'s> {
                             let signature = self
                                 .deep_resolver(path)
                                 .resolve_signature_unwrap(conjure_function.signature.as_str());
-                            FunctionAssignmentRhs::Conjure { signature }
+                            let contents = &self.context_contents[&context];
+                            FunctionAssignmentRhs::Conjure {
+                                signature,
+                                dependencies: resolve_conjure_dependencies(
+                                    contents,
+                                    conjure_function.dependencies,
+                                ),
+                            }
                         }
                         parse::FunctionAssignmentRhs::Define(define_function) => {
                             let define_context = ContextId::generate();

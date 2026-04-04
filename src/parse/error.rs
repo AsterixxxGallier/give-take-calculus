@@ -67,6 +67,9 @@ pub(crate) enum ParseError<'s> {
     ExpectedFromOrSignatureOrFunctionLiteral {
         location: SourceLocation<'s>,
     },
+    ExpectedUsingOrEndOfLine {
+        location: SourceLocation<'s>,
+    },
 }
 
 fn simple_report<'s>(
@@ -138,8 +141,11 @@ impl<'s> ParseError<'s> {
             ParseError::ExpectedFromOrEndOfLine { location } => {
                 simple_report(location, "expected 'from' keyword or end of line")
             }
+            ParseError::ExpectedUsingOrEndOfLine { location } => {
+                simple_report(location, "expected 'using' keyword or end of line")
+            }
             ParseError::ExpectedEquals { location } => {
-                simple_report(location, "expected equals sign")
+                simple_report(location, "expected '=' sign")
             }
             ParseError::ExpectedSignatureAssignmentRhs { location } => simple_report(
                 location,
