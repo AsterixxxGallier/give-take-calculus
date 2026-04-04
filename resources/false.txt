@@ -10,8 +10,8 @@
   (q) = take
   (p_implies) = give (p) to (implies)
   (p_q) = give (q) to (p_implies)
-  (q_implies) = give (q) as '(p)' to (implies)
-  (q_p) = give (p) as '(q)' to (q_implies)
+  (q_implies) = give (q) as (p) to (implies)
+  (q_p) = give (p) as (q) to (q_implies)
   p_q = conjure (p_q)
   q_p = conjure (q_p)
   give p_q
@@ -40,7 +40,7 @@ not_apply = define
 (not_not) = define
   (p) = take
   (not_p) = give (p) to (not)
-  (not_not_p) = give (not_p) as '(p)' to (not)
+  (not_not_p) = give (not_p) as (p) to (not)
   not_not_p = take (not_not_p)
   p = conjure (p)
   give p

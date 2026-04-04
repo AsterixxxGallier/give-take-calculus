@@ -1,11 +1,11 @@
 // #![feature(debug_closure_helpers)]
 #![feature(pattern)]
 
-use crate::model::Model;
+// use crate::model::Model;
 use crate::parse::Source;
 
 mod parse;
-mod model;
+// mod model;
 
 fn main() {
     let path = "resources/false.txt";
@@ -16,9 +16,9 @@ fn main() {
             println!("parsing successful");
             // println!("{:#?}", context);
 
-            let model = Model::build(context);
+            // let model = Model::build(context);
             // model.check();
-            _ = model;
+            // _ = model;
         }
         Err(error) => {
             error.report().eprint((path.to_owned(), &source.inner)).unwrap();

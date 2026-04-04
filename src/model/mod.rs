@@ -293,7 +293,7 @@ impl<'s> Model<'s> {
 
                     let rhs = match signature_assignment.rhs {
                         parse::SignatureAssignmentRhs::Take(take_signature) => {
-                            let literal = self.signature_literal(take_signature.literal.as_str());
+                            let literal = self.signature_literal(take_signature.foreign.as_str());
                             SignatureAssignmentRhs::Take { literal }
                         }
                         parse::SignatureAssignmentRhs::Conjure(conjure_signature) => {
@@ -319,7 +319,7 @@ impl<'s> Model<'s> {
                                 .deep_resolver(path)
                                 .resolve_function_unwrap(take_signature_from.source.as_str());
                             let literal =
-                                self.signature_literal(take_signature_from.literal.as_str());
+                                self.signature_literal(take_signature_from.foreign.as_str());
                             SignatureAssignmentRhs::TakeFrom { literal, source }
                         }
                         parse::SignatureAssignmentRhs::GiveSignatureToSignature(
@@ -329,7 +329,7 @@ impl<'s> Model<'s> {
                                 .deep_resolver(path)
                                 .resolve_signature_unwrap(give_signature_to.signature.as_str());
                             let literal =
-                                self.signature_literal(give_signature_to.literal.as_str());
+                                self.signature_literal(give_signature_to.foreign.as_str());
                             let source = self
                                 .deep_resolver(path)
                                 .resolve_signature_unwrap(give_signature_to.source.as_str());
@@ -345,7 +345,7 @@ impl<'s> Model<'s> {
                             let function = self
                                 .deep_resolver(path)
                                 .resolve_function_unwrap(give_function_to.function.as_str());
-                            let literal = self.function_literal(give_function_to.literal.as_str());
+                            let literal = self.function_literal(give_function_to.foreign.as_str());
                             let source = self
                                 .deep_resolver(path)
                                 .resolve_signature_unwrap(give_function_to.source.as_str());
@@ -404,7 +404,7 @@ impl<'s> Model<'s> {
                                 .deep_resolver(path)
                                 .resolve_function_unwrap(take_function_from.source.as_str());
                             let literal =
-                                self.function_literal(take_function_from.literal.as_str());
+                                self.function_literal(take_function_from.foreign.as_str());
                             FunctionAssignmentRhs::TakeFrom { literal, source }
                         }
                         parse::FunctionAssignmentRhs::GiveSignatureToFunction(
@@ -414,7 +414,7 @@ impl<'s> Model<'s> {
                                 .deep_resolver(path)
                                 .resolve_signature_unwrap(give_signature_to.signature.as_str());
                             let literal =
-                                self.signature_literal(give_signature_to.literal.as_str());
+                                self.signature_literal(give_signature_to.foreign.as_str());
                             let source = self
                                 .deep_resolver(path)
                                 .resolve_function_unwrap(give_signature_to.source.as_str());
@@ -428,7 +428,7 @@ impl<'s> Model<'s> {
                             let function = self
                                 .deep_resolver(path)
                                 .resolve_function_unwrap(give_function_to.function.as_str());
-                            let literal = self.function_literal(give_function_to.literal.as_str());
+                            let literal = self.function_literal(give_function_to.foreign.as_str());
                             let source = self
                                 .deep_resolver(path)
                                 .resolve_function_unwrap(give_function_to.source.as_str());

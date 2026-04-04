@@ -8,6 +8,7 @@ pub(crate) use error::*;
 pub(crate) use source::*;
 pub(crate) use source_location::*;
 pub(crate) use source_location_lines::*;
+use std::marker::PhantomData;
 pub(crate) use syntax_tree::*;
 
 #[allow(non_snake_case, reason = "used in type position")]
@@ -142,141 +143,49 @@ fn parse_conjure_dependencies(
     }
 }
 
-fn parse_signature_literal(location: SourceLocation<'_>) -> LocationParseResult![SignatureLiteral] {
-    if let Some(location) = location.strip_prefix('\'') {
-        match parse_signature(location) {
-            Ok((location, signature)) => {
-                if let Some(location) = location.strip_prefix('\'') {
-                    let literal = SignatureLiteral::Explicit {
-                        with_ticks: signature.with_parens.grow(1),
-                        with_parens: signature.with_parens,
-                        symbol: signature.symbol,
-                    };
-                    Ok((location, literal))
-                } else {
-                    let location = location.truncate(1);
-                    Err(ParseError::ExpectedClosingTick { location })
-                }
-            }
-            Err(ParseError::ExpectedSignature { location }) => {
-                let location = location.grow_start(1);
-                Err(ParseError::ExpectedSignatureLiteral { location })
-            }
-            Err(other) => Err(other),
-        }
-    } else {
-        let location = location.take_until_whitespace();
-        Err(ParseError::ExpectedSignatureLiteral { location })
-    }
-}
-
-fn parse_function_literal(location: SourceLocation<'_>) -> LocationParseResult![FunctionLiteral] {
-    if let Some(location) = location.strip_prefix('\'') {
-        match parse_function(location) {
-            Ok((location, function)) => {
-                if let Some(location) = location.strip_prefix('\'') {
-                    let literal = FunctionLiteral::Explicit {
-                        with_ticks: function.symbol.grow(1),
-                        symbol: function.symbol,
-                    };
-                    Ok((location, literal))
-                } else {
-                    let location = location.truncate(1);
-                    Err(ParseError::ExpectedClosingTick { location })
-                }
-            }
-            Err(ParseError::ExpectedFunction { location }) => {
-                let location = location.grow_start(1);
-                Err(ParseError::ExpectedFunctionLiteral { location })
-            }
-            Err(other) => Err(other),
-        }
-    } else {
-        let location = location.take_until_whitespace();
-        Err(ParseError::ExpectedFunctionLiteral { location })
-    }
-}
-
-fn parse_maybe_signature_literal<'s>(
+fn parse_maybe_as_signature<'s>(
     location: SourceLocation<'s>,
     implicit: Signature<'s>,
-) -> LocationParseResult!['s, SignatureLiteral] {
-    if location.starts_with('\'') {
-        let (location, literal) = parse_signature_literal(location)?;
-        Ok((location, literal))
-    } else {
-        Ok((location, SignatureLiteral::Implicit(implicit)))
-    }
-}
-
-fn parse_maybe_function_literal<'s>(
-    location: SourceLocation<'s>,
-    implicit: Function<'s>,
-) -> LocationParseResult!['s, FunctionLiteral] {
-    if location.starts_with('\'') {
-        let (location, literal) = parse_function_literal(location)?;
-        Ok((location, literal))
-    } else {
-        Ok((location, FunctionLiteral::Implicit(implicit)))
-    }
-}
-
-fn parse_maybe_as_signature_literal<'s>(
-    location: SourceLocation<'s>,
-    implicit: Signature<'s>,
-) -> LocationParseResult!['s, SignatureLiteral] {
+) -> LocationParseResult!['s, ForeignSignature] {
     if let Some(location) = location.strip_prefix("as") {
         let location = location.trim_start();
-        let (location, literal) = parse_signature_literal(location)?;
-        Ok((location, literal))
+        let (location, signature) = parse_signature(location)?;
+        Ok((location, ForeignSignature::Explicit(signature)))
     } else {
-        Ok((location, SignatureLiteral::Implicit(implicit)))
+        Ok((location, ForeignSignature::Implicit(implicit)))
     }
 }
 
-fn parse_maybe_as_function_literal<'s>(
+fn parse_maybe_as_function<'s>(
     location: SourceLocation<'s>,
     implicit: Function<'s>,
-) -> LocationParseResult!['s, FunctionLiteral] {
+) -> LocationParseResult!['s, ForeignFunction] {
     if let Some(location) = location.strip_prefix("as") {
         let location = location.trim_start();
-        let (location, literal) = parse_function_literal(location)?;
-        Ok((location, literal))
+        let (location, function) = parse_function(location)?;
+        Ok((location, ForeignFunction::Explicit(function)))
     } else {
-        Ok((location, FunctionLiteral::Implicit(implicit)))
+        Ok((location, ForeignFunction::Implicit(implicit)))
     }
 }
 
 fn parse_give_signature_statement(location: SourceLocation<'_>) -> ParseResult![Statement] {
     let (location, signature) = parse_signature(location)?;
     let location = location.trim_start();
-    let (location, literal) = parse_maybe_as_signature_literal(location, signature)?;
-    let location = location.trim_start();
     if !location.is_empty() {
-        match literal {
-            SignatureLiteral::Explicit { .. } => Err(ParseError::ExpectedEndOfLine { location }),
-            SignatureLiteral::Implicit(_) => Err(ParseError::ExpectedAsOrEndOfLine { location }),
-        }
+        Err(ParseError::ExpectedEndOfLine { location })
     } else {
-        Ok(Statement::GiveSignature(GiveSignature {
-            signature,
-            literal,
-        }))
+        Ok(Statement::GiveSignature(GiveSignature { signature }))
     }
 }
 
 fn parse_give_function_statement(location: SourceLocation<'_>) -> ParseResult![Statement] {
     let (location, function) = parse_function(location)?;
     let location = location.trim_start();
-    let (location, literal) = parse_maybe_as_function_literal(location, function)?;
-    let location = location.trim_start();
     if !location.is_empty() {
-        match literal {
-            FunctionLiteral::Explicit { .. } => Err(ParseError::ExpectedEndOfLine { location }),
-            FunctionLiteral::Implicit(_) => Err(ParseError::ExpectedAsOrEndOfLine { location }),
-        }
+        Err(ParseError::ExpectedEndOfLine { location })
     } else {
-        Ok(Statement::GiveFunction(GiveFunction { function, literal }))
+        Ok(Statement::GiveFunction(GiveFunction { function }))
     }
 }
 
@@ -338,31 +247,42 @@ fn parse_define_signature<'s>(
 /// location should not include the keyword and the whitespace that follows
 fn parse_take_signature_or_take_signature_from<'s>(
     location: SourceLocation<'s>,
-    implicit_literal: Signature<'s>,
+    implicit: Signature<'s>,
 ) -> ParseResult!['s, SignatureAssignmentRhs] {
-    let (location, literal) = parse_maybe_signature_literal(location, implicit_literal)?;
-    let location = location.trim_start();
     if location.is_empty() {
-        let rhs = SignatureAssignmentRhs::Take(TakeSignature { literal });
+        let rhs = SignatureAssignmentRhs::Take(TakeSignature {
+            phantom: PhantomData,
+        });
         Ok(rhs)
-    } else if let Some(location) = location.strip_prefix("from") {
+    } else {
+        let (location, foreign) = if let Some(location) = location.strip_prefix("from") {
+            (location, ForeignSignature::Implicit(implicit))
+        } else {
+            let (location, signature) = match parse_signature(location) {
+                Ok((location, signature)) => (location, signature),
+                Err(ParseError::ExpectedSignature { location }) => {
+                    return Err(ParseError::ExpectedFromOrSignatureOrEndOfLine { location });
+                }
+                Err(other) => return Err(other),
+            };
+            let location = location.trim_start();
+            if let Some(location) = location.strip_prefix("from") {
+                (location, ForeignSignature::Explicit(signature))
+            } else {
+                return Err(ParseError::ExpectedFrom { location });
+            }
+        };
         let location = location.trim_start();
         let (location, source) = parse_function(location)?;
         let location = location.trim_start();
         if location.is_empty() {
-            let rhs = SignatureAssignmentRhs::TakeFrom(TakeSignatureFrom { literal, source });
+            let rhs = SignatureAssignmentRhs::TakeFrom(TakeSignatureFrom {
+                foreign,
+                source,
+            });
             Ok(rhs)
         } else {
             Err(ParseError::ExpectedEndOfLine { location })
-        }
-    } else {
-        match literal {
-            SignatureLiteral::Explicit { .. } => {
-                Err(ParseError::ExpectedFromOrEndOfLine { location })
-            }
-            SignatureLiteral::Implicit(_) => {
-                Err(ParseError::ExpectedFromOrSignatureLiteralOrEndOfLine { location })
-            }
         }
     }
 }
@@ -372,7 +292,7 @@ fn parse_give_to_signature(location: SourceLocation<'_>) -> ParseResult![Signatu
     if location.starts_with('(') {
         let (location, signature) = parse_signature(location)?;
         let location = location.trim_start();
-        let (location, literal) = parse_maybe_as_signature_literal(location, signature)?;
+        let (location, foreign) = parse_maybe_as_signature(location, signature)?;
         let location = location.trim_start();
         if let Some(location) = location.strip_prefix("to") {
             let location = location.trim_start();
@@ -382,7 +302,7 @@ fn parse_give_to_signature(location: SourceLocation<'_>) -> ParseResult![Signatu
                 let rhs =
                     SignatureAssignmentRhs::GiveSignatureToSignature(GiveSignatureToSignature {
                         signature,
-                        literal,
+                        foreign,
                         source,
                     });
                 Ok(rhs)
@@ -392,15 +312,15 @@ fn parse_give_to_signature(location: SourceLocation<'_>) -> ParseResult![Signatu
         } else {
             // both 'as' and 'to' keywords are two chars long
             let location = location.truncate(2);
-            match literal {
-                SignatureLiteral::Explicit { .. } => Err(ParseError::ExpectedTo { location }),
-                SignatureLiteral::Implicit(_) => Err(ParseError::ExpectedAsOrTo { location }),
+            match foreign {
+                ForeignSignature::Explicit { .. } => Err(ParseError::ExpectedTo { location }),
+                ForeignSignature::Implicit(_) => Err(ParseError::ExpectedAsOrTo { location }),
             }
         }
     } else if location.starts_with(is_symbol_char) {
         let (location, function) = parse_function(location)?;
         let location = location.trim_start();
-        let (location, literal) = parse_maybe_as_function_literal(location, function)?;
+        let (location, foreign) = parse_maybe_as_function(location, function)?;
         let location = location.trim_start();
         if let Some(location) = location.strip_prefix("to") {
             let location = location.trim_start();
@@ -410,7 +330,7 @@ fn parse_give_to_signature(location: SourceLocation<'_>) -> ParseResult![Signatu
                 let rhs =
                     SignatureAssignmentRhs::GiveFunctionToSignature(GiveFunctionToSignature {
                         function,
-                        literal,
+                        foreign,
                         source,
                     });
                 Ok(rhs)
@@ -420,9 +340,9 @@ fn parse_give_to_signature(location: SourceLocation<'_>) -> ParseResult![Signatu
         } else {
             // both 'as' and 'to' keywords are two chars long
             let location = location.truncate(2);
-            match literal {
-                FunctionLiteral::Explicit { .. } => Err(ParseError::ExpectedTo { location }),
-                FunctionLiteral::Implicit(_) => Err(ParseError::ExpectedAsOrTo { location }),
+            match foreign {
+                ForeignFunction::Explicit(_) => Err(ParseError::ExpectedTo { location }),
+                ForeignFunction::Implicit(_) => Err(ParseError::ExpectedAsOrTo { location }),
             }
         }
     } else {
@@ -434,7 +354,7 @@ fn parse_give_to_signature(location: SourceLocation<'_>) -> ParseResult![Signatu
 fn parse_signature_assignment_rhs<'s>(
     location: SourceLocation<'s>,
     following_lines: SourceLocationLines<'s>,
-    implicit_literal: Signature<'s>,
+    implicit: Signature<'s>,
 ) -> LinesParseResult!['s, SignatureAssignmentRhs] {
     if let Some(location) = location.strip_prefix("conjure") {
         let location = location.trim_start();
@@ -446,7 +366,7 @@ fn parse_signature_assignment_rhs<'s>(
         Ok((following_lines, rhs))
     } else if let Some(location) = location.strip_prefix("take") {
         let location = location.trim_start();
-        let rhs = parse_take_signature_or_take_signature_from(location, implicit_literal)?;
+        let rhs = parse_take_signature_or_take_signature_from(location, implicit)?;
         Ok((following_lines, rhs))
     } else if let Some(location) = location.strip_prefix("give") {
         let location = location.trim_start();
@@ -469,7 +389,10 @@ fn parse_conjure_function(location: SourceLocation<'_>) -> ParseResult![Function
             Err(ParseError::ExpectedEndOfLine { location })
         };
     }
-    let rhs = FunctionAssignmentRhs::Conjure(ConjureFunction { signature, dependencies });
+    let rhs = FunctionAssignmentRhs::Conjure(ConjureFunction {
+        signature,
+        dependencies,
+    });
     Ok(rhs)
 }
 
@@ -489,39 +412,45 @@ fn parse_define_function<'s>(
 /// location should not include the keyword and the whitespace that follows
 fn parse_take_function_or_take_function_from<'s>(
     location: SourceLocation<'s>,
-    implicit_literal: Function<'s>,
+    implicit: Function<'s>,
 ) -> ParseResult!['s, FunctionAssignmentRhs] {
     if location.starts_with('(') {
         let (location, signature) = parse_signature(location)?;
-        let (location, literal) = parse_maybe_function_literal(location, implicit_literal)?;
         let location = location.trim_start();
         if !location.is_empty() {
             return Err(ParseError::ExpectedEndOfLine { location });
         }
-        let rhs = FunctionAssignmentRhs::Take(TakeFunction { signature, literal });
+        let rhs = FunctionAssignmentRhs::Take(TakeFunction { signature });
         Ok(rhs)
     } else {
-        let (location, literal) = parse_maybe_function_literal(location, implicit_literal)?;
-        let location = location.trim_start();
-        if let Some(location) = location.strip_prefix("from") {
-            let location = location.trim_start();
-            let (location, source) = parse_function(location)?;
-            let location = location.trim_start();
-            if location.is_empty() {
-                let rhs = FunctionAssignmentRhs::TakeFrom(TakeFunctionFrom { literal, source });
-                Ok(rhs)
-            } else {
-                Err(ParseError::ExpectedEndOfLine { location })
-            }
+        let (location, foreign) = if let Some(location) = location.strip_prefix("from") {
+            (location, ForeignFunction::Implicit(implicit))
         } else {
-            match literal {
-                FunctionLiteral::Explicit { .. } => {
-                    Err(ParseError::ExpectedFromOrSignature { location })
+            let (location, function) = match parse_function(location) {
+                Ok((location, function)) => (location, function),
+                Err(ParseError::ExpectedFunction { location }) => {
+                    return Err(ParseError::ExpectedFromOrSignatureOrFunction { location });
                 }
-                FunctionLiteral::Implicit(_) => {
-                    Err(ParseError::ExpectedFromOrSignatureOrFunctionLiteral { location })
-                }
+                Err(other) => return Err(other),
+            };
+            let location = location.trim_start();
+            if let Some(location) = location.strip_prefix("from") {
+                (location, ForeignFunction::Explicit(function))
+            } else {
+                return Err(ParseError::ExpectedFrom { location });
             }
+        };
+        let location = location.trim_start();
+        let (location, source) = parse_function(location)?;
+        let location = location.trim_start();
+        if location.is_empty() {
+            let rhs = FunctionAssignmentRhs::TakeFrom(TakeFunctionFrom {
+                foreign,
+                source,
+            });
+            Ok(rhs)
+        } else {
+            Err(ParseError::ExpectedEndOfLine { location })
         }
     }
 }
@@ -531,7 +460,7 @@ fn parse_give_to_function(location: SourceLocation<'_>) -> ParseResult![Function
     if location.starts_with('(') {
         let (location, signature) = parse_signature(location)?;
         let location = location.trim_start();
-        let (location, literal) = parse_maybe_as_signature_literal(location, signature)?;
+        let (location, foreign) = parse_maybe_as_signature(location, signature)?;
         let location = location.trim_start();
         if let Some(location) = location.strip_prefix("to") {
             let location = location.trim_start();
@@ -540,7 +469,7 @@ fn parse_give_to_function(location: SourceLocation<'_>) -> ParseResult![Function
             if location.is_empty() {
                 let rhs = FunctionAssignmentRhs::GiveSignatureToFunction(GiveSignatureToFunction {
                     signature,
-                    literal,
+                    foreign,
                     source,
                 });
                 Ok(rhs)
@@ -550,15 +479,15 @@ fn parse_give_to_function(location: SourceLocation<'_>) -> ParseResult![Function
         } else {
             // both 'as' and 'to' keywords are two chars long
             let location = location.truncate(2);
-            match literal {
-                SignatureLiteral::Explicit { .. } => Err(ParseError::ExpectedTo { location }),
-                SignatureLiteral::Implicit(_) => Err(ParseError::ExpectedAsOrTo { location }),
+            match foreign {
+                ForeignSignature::Explicit { .. } => Err(ParseError::ExpectedTo { location }),
+                ForeignSignature::Implicit(_) => Err(ParseError::ExpectedAsOrTo { location }),
             }
         }
     } else if location.starts_with(is_symbol_char) {
         let (location, function) = parse_function(location)?;
         let location = location.trim_start();
-        let (location, literal) = parse_maybe_as_function_literal(location, function)?;
+        let (location, foreign) = parse_maybe_as_function(location, function)?;
         let location = location.trim_start();
         if let Some(location) = location.strip_prefix("to") {
             let location = location.trim_start();
@@ -567,7 +496,7 @@ fn parse_give_to_function(location: SourceLocation<'_>) -> ParseResult![Function
             if location.is_empty() {
                 let rhs = FunctionAssignmentRhs::GiveFunctionToFunction(GiveFunctionToFunction {
                     function,
-                    literal,
+                    foreign,
                     source,
                 });
                 Ok(rhs)
@@ -577,9 +506,9 @@ fn parse_give_to_function(location: SourceLocation<'_>) -> ParseResult![Function
         } else {
             // both 'as' and 'to' keywords are two chars long
             let location = location.truncate(2);
-            match literal {
-                FunctionLiteral::Explicit { .. } => Err(ParseError::ExpectedTo { location }),
-                FunctionLiteral::Implicit(_) => Err(ParseError::ExpectedAsOrTo { location }),
+            match foreign {
+                ForeignFunction::Explicit(_) => Err(ParseError::ExpectedTo { location }),
+                ForeignFunction::Implicit(_) => Err(ParseError::ExpectedAsOrTo { location }),
             }
         }
     } else {
@@ -591,7 +520,7 @@ fn parse_give_to_function(location: SourceLocation<'_>) -> ParseResult![Function
 fn parse_function_assignment_rhs<'s>(
     location: SourceLocation<'s>,
     following_lines: SourceLocationLines<'s>,
-    implicit_literal: Function<'s>,
+    implicit: Function<'s>,
 ) -> LinesParseResult!['s, FunctionAssignmentRhs] {
     if let Some(location) = location.strip_prefix("conjure") {
         let location = location.trim_start();
@@ -603,7 +532,7 @@ fn parse_function_assignment_rhs<'s>(
         Ok((following_lines, rhs))
     } else if let Some(location) = location.strip_prefix("take") {
         let location = location.trim_start();
-        let rhs = parse_take_function_or_take_function_from(location, implicit_literal)?;
+        let rhs = parse_take_function_or_take_function_from(location, implicit)?;
         Ok((following_lines, rhs))
     } else if let Some(location) = location.strip_prefix("give") {
         let location = location.trim_start();

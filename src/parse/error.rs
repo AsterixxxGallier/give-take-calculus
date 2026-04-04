@@ -22,16 +22,7 @@ pub(crate) enum ParseError<'s> {
     ExpectedFunction {
         location: SourceLocation<'s>,
     },
-    ExpectedSignatureLiteral {
-        location: SourceLocation<'s>,
-    },
-    ExpectedFunctionLiteral {
-        location: SourceLocation<'s>,
-    },
     ExpectedClosingParen {
-        location: SourceLocation<'s>,
-    },
-    ExpectedClosingTick {
         location: SourceLocation<'s>,
     },
     ExpectedEndOfLine {
@@ -58,16 +49,19 @@ pub(crate) enum ParseError<'s> {
     ExpectedFunctionAssignmentRhs {
         location: SourceLocation<'s>,
     },
-    ExpectedFromOrSignatureLiteralOrEndOfLine {
+    ExpectedFromOrSignatureOrEndOfLine {
         location: SourceLocation<'s>,
     },
     ExpectedFromOrSignature {
         location: SourceLocation<'s>,
     },
-    ExpectedFromOrSignatureOrFunctionLiteral {
+    ExpectedFromOrSignatureOrFunction {
         location: SourceLocation<'s>,
     },
     ExpectedUsingOrEndOfLine {
+        location: SourceLocation<'s>,
+    },
+    ExpectedFrom {
         location: SourceLocation<'s>,
     },
 }
@@ -120,17 +114,8 @@ impl<'s> ParseError<'s> {
             ParseError::ExpectedFunction { location } => {
                 simple_report(location, "expected function")
             }
-            ParseError::ExpectedSignatureLiteral { location } => {
-                simple_report(location, "expected signature literal")
-            }
-            ParseError::ExpectedFunctionLiteral { location } => {
-                simple_report(location, "expected function literal")
-            }
             ParseError::ExpectedClosingParen { location } => {
-                simple_report(location, "expected closing parenthesis")
-            }
-            ParseError::ExpectedClosingTick { location } => {
-                simple_report(location, "expected single quotation mark")
+                simple_report(location, "expected ')'")
             }
             ParseError::ExpectedEndOfLine { location } => {
                 simple_report(location, "expected end of line")
@@ -144,9 +129,7 @@ impl<'s> ParseError<'s> {
             ParseError::ExpectedUsingOrEndOfLine { location } => {
                 simple_report(location, "expected 'using' keyword or end of line")
             }
-            ParseError::ExpectedEquals { location } => {
-                simple_report(location, "expected '=' sign")
-            }
+            ParseError::ExpectedEquals { location } => simple_report(location, "expected '='"),
             ParseError::ExpectedSignatureAssignmentRhs { location } => simple_report(
                 location,
                 "expected 'define', 'give', 'take' or 'conjure' keyword",
@@ -159,17 +142,19 @@ impl<'s> ParseError<'s> {
             ParseError::ExpectedAsOrTo { location } => {
                 simple_report(location, "expected 'as' or 'to' keyword")
             }
-            ParseError::ExpectedFromOrSignatureLiteralOrEndOfLine { location } => simple_report(
+            ParseError::ExpectedFromOrSignatureOrEndOfLine { location } => simple_report(
                 location,
-                "expected 'from' keyword, signature literal or end of line",
+                "expected 'from' keyword, signature or end of line",
             ),
             ParseError::ExpectedFromOrSignature { location } => {
                 simple_report(location, "expected 'from' keyword or signature")
             }
-            ParseError::ExpectedFromOrSignatureOrFunctionLiteral { location } => simple_report(
-                location,
-                "expected 'from' keyword, function literal or signature",
-            ),
+            ParseError::ExpectedFromOrSignatureOrFunction { location } => {
+                simple_report(location, "expected 'from' keyword, signature or function")
+            }
+            ParseError::ExpectedFrom { location } => {
+                simple_report(location, "expected 'from' keyword")
+            }
         }
     }
 }

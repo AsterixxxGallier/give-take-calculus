@@ -1,4 +1,5 @@
 use crate::parse::SourceLocation;
+use std::marker::PhantomData;
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) struct Signature<'s> {
@@ -12,24 +13,14 @@ pub(crate) struct Function<'s> {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub(crate) enum SignatureLiteral<'s> {
-    Explicit {
-        #[expect(unused)]
-        with_ticks: SourceLocation<'s>,
-        #[expect(unused)]
-        with_parens: SourceLocation<'s>,
-        symbol: SourceLocation<'s>,
-    },
+pub(crate) enum ForeignSignature<'s> {
+    Explicit(Signature<'s>),
     Implicit(Signature<'s>),
 }
 
 #[derive(Debug, Copy, Clone)]
-pub(crate) enum FunctionLiteral<'s> {
-    Explicit {
-        #[expect(unused)]
-        with_ticks: SourceLocation<'s>,
-        symbol: SourceLocation<'s>,
-    },
+pub(crate) enum ForeignFunction<'s> {
+    Explicit(Function<'s>),
     Implicit(Function<'s>),
 }
 
@@ -44,7 +35,7 @@ pub(crate) struct ConjureDependencies<'s>(pub(crate) Vec<ConjureDependency<'s>>)
 
 #[derive(Debug, Clone)]
 pub(crate) struct TakeSignature<'s> {
-    pub(crate) literal: SignatureLiteral<'s>,
+    pub(crate) phantom: PhantomData<SourceLocation<'s>>,
 }
 
 #[derive(Debug, Clone)]
@@ -59,21 +50,21 @@ pub(crate) struct DefineSignature<'s> {
 
 #[derive(Debug, Clone)]
 pub(crate) struct TakeSignatureFrom<'s> {
-    pub(crate) literal: SignatureLiteral<'s>,
+    pub(crate) foreign: ForeignSignature<'s>,
     pub(crate) source: Function<'s>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct GiveSignatureToSignature<'s> {
     pub(crate) signature: Signature<'s>,
-    pub(crate) literal: SignatureLiteral<'s>,
+    pub(crate) foreign: ForeignSignature<'s>,
     pub(crate) source: Signature<'s>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct GiveFunctionToSignature<'s> {
     pub(crate) function: Function<'s>,
-    pub(crate) literal: FunctionLiteral<'s>,
+    pub(crate) foreign: ForeignFunction<'s>,
     pub(crate) source: Signature<'s>,
 }
 
@@ -96,7 +87,6 @@ pub(crate) struct SignatureAssignment<'s> {
 #[derive(Debug, Clone)]
 pub(crate) struct TakeFunction<'s> {
     pub(crate) signature: Signature<'s>,
-    pub(crate) literal: FunctionLiteral<'s>,
 }
 
 #[derive(Debug, Clone)]
@@ -112,21 +102,21 @@ pub(crate) struct DefineFunction<'s> {
 
 #[derive(Debug, Clone)]
 pub(crate) struct TakeFunctionFrom<'s> {
-    pub(crate) literal: FunctionLiteral<'s>,
+    pub(crate) foreign: ForeignFunction<'s>,
     pub(crate) source: Function<'s>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct GiveSignatureToFunction<'s> {
     pub(crate) signature: Signature<'s>,
-    pub(crate) literal: SignatureLiteral<'s>,
+    pub(crate) foreign: ForeignSignature<'s>,
     pub(crate) source: Function<'s>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct GiveFunctionToFunction<'s> {
     pub(crate) function: Function<'s>,
-    pub(crate) literal: FunctionLiteral<'s>,
+    pub(crate) foreign: ForeignFunction<'s>,
     pub(crate) source: Function<'s>,
 }
 
@@ -149,13 +139,11 @@ pub(crate) struct FunctionAssignment<'s> {
 #[derive(Debug, Clone)]
 pub(crate) struct GiveSignature<'s> {
     pub(crate) signature: Signature<'s>,
-    pub(crate) literal: SignatureLiteral<'s>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct GiveFunction<'s> {
     pub(crate) function: Function<'s>,
-    pub(crate) literal: FunctionLiteral<'s>,
 }
 
 #[derive(Debug, Clone)]
@@ -181,20 +169,20 @@ impl<'s> Function<'s> {
     }
 }
 
-impl<'s> SignatureLiteral<'s> {
+impl<'s> ForeignSignature<'s> {
     pub(crate) fn as_str(self) -> &'s str {
         match self {
-            SignatureLiteral::Explicit { symbol, .. } => symbol.as_str(),
-            SignatureLiteral::Implicit(signature) => signature.as_str(),
+            ForeignSignature::Explicit(signature) => signature.as_str(),
+            ForeignSignature::Implicit(signature) => signature.as_str(),
         }
     }
 }
 
-impl<'s> FunctionLiteral<'s> {
+impl<'s> ForeignFunction<'s> {
     pub(crate) fn as_str(self) -> &'s str {
         match self {
-            FunctionLiteral::Explicit { symbol, .. } => symbol.as_str(),
-            FunctionLiteral::Implicit(function) => function.as_str(),
+            ForeignFunction::Explicit(function) => function.as_str(),
+            ForeignFunction::Implicit(function) => function.as_str(),
         }
     }
 }
