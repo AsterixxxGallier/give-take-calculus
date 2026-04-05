@@ -578,7 +578,9 @@ fn parse_signature_statement(
     let line = line.trim_start();
 
     let location = location.advance().expect("should not be empty");
-    if let Some(line) = line.strip_prefix("conjure") {
+    if let Some(line) = line.take_prefix("give") {
+        Err(ParseError::GiveInSignatureContext { location: line })
+    } else if let Some(line) = line.strip_prefix("conjure") {
         let line = line.trim_start();
         let statement = parse_conjure_statement(line)?;
         Ok((location, statement))
@@ -602,7 +604,9 @@ fn parse_function_statement(
     let line = line.trim_start();
 
     let location = location.advance().expect("should not be empty");
-    if let Some(line) = line.strip_prefix("give") {
+    if let Some(line) = line.take_prefix("conjure") {
+        Err(ParseError::ConjureInFunctionContext { location: line })
+    } else if let Some(line) = line.strip_prefix("give") {
         let line = line.trim_start();
         let statement = parse_give_statement(line)?;
         Ok((location, statement))

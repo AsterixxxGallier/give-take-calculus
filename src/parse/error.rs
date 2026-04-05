@@ -67,6 +67,12 @@ pub(crate) enum ParseError<'s> {
     ExpectedFunctionOrEndOfLine {
         location: SourceLocation<'s>,
     },
+    GiveInSignatureContext {
+        location: SourceLocation<'s>,
+    },
+    ConjureInFunctionContext {
+        location: SourceLocation<'s>,
+    },
 }
 
 fn simple_report<'s>(
@@ -163,6 +169,14 @@ impl<'s> ParseError<'s> {
             ParseError::ExpectedFunctionOrEndOfLine { location } => {
                 simple_report(location, "expected function or end of line")
             }
+            ParseError::GiveInSignatureContext { location } => simple_report(
+                location,
+                "'give' statements cannot be used in signature contexts",
+            ),
+            ParseError::ConjureInFunctionContext { location } => simple_report(
+                location,
+                "'conjure' statements cannot be used in function contexts",
+            ),
         }
     }
 }

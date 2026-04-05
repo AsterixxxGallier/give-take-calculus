@@ -227,4 +227,13 @@ impl<'s> SourceLocation<'s> {
             None
         }
     }
+
+    pub(super) fn take_prefix<P: Pattern>(mut self, pattern: P) -> Option<Self> {
+        let mut searcher = pattern.into_searcher(self.as_str());
+        if let SearchStep::Match(_, len) = searcher.next() {
+            Some(self.truncate(len))
+        } else {
+            None
+        }
+    }
 }
