@@ -10,6 +10,9 @@ pub(crate) enum ParseError<'s> {
     UnexpectedIndentation {
         indentation: SourceLocation<'s>,
     },
+    ReservedSymbol {
+        location: SourceLocation<'s>,
+    },
     ExpectedSignatureStatement {
         location: SourceLocation<'s>,
     },
@@ -102,6 +105,10 @@ impl<'s> ParseError<'s> {
             ParseError::UnexpectedIndentation { indentation } => {
                 simple_report(indentation, "unexpected indentation")
             }
+            ParseError::ReservedSymbol { location } => simple_report(
+                location,
+                "reserved symbol used as function or signature name",
+            ),
             ParseError::ExpectedSignatureStatement { location } => {
                 simple_report(location, "expected assignment or 'conjure' keyword")
             }

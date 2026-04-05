@@ -79,10 +79,14 @@ fn is_symbol_char(char: char) -> bool {
 }
 
 fn parse_symbol(location: SourceLocation<'_>) -> LocationParseResult![SourceLocation] {
+    const RESERVED_SYMBOLS: &[&str] = &["define", "take", "give", "conjure"];
+
     let (symbol, location) = location.partition(is_symbol_char);
     if symbol.is_empty() {
         let location = location.take_until_whitespace();
         Err(ParseError::ExpectedSignatureOrFunction { location })
+    } else if RESERVED_SYMBOLS.contains(&symbol.as_str()) {
+        Err(ParseError::ReservedSymbol { location: symbol })
     } else {
         Ok((location, symbol))
     }
@@ -536,9 +540,7 @@ fn parse_function_assignment_statement<'s>(
     Ok((following_lines, statement))
 }
 
-fn parse_conjure_statement(
-    location: SourceLocation<'_>,
-) -> ParseResult![SignatureStatement] {
+fn parse_conjure_statement(location: SourceLocation<'_>) -> ParseResult![SignatureStatement] {
     let (location, signature) = parse_signature(location)?;
     let location = location.trim_start();
     let (location, function) = if location.starts_with("using") || location.is_empty() {
