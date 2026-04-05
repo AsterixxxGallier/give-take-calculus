@@ -39,13 +39,8 @@ pub(crate) struct TakeSignature<'s> {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct ConjureSignature<'s> {
-    pub(crate) dependencies: ConjureDependencies<'s>,
-}
-
-#[derive(Debug, Clone)]
 pub(crate) struct DefineSignature<'s> {
-    pub(crate) context: Context<'s>,
+    pub(crate) context: SignatureContext<'s>,
 }
 
 #[derive(Debug, Clone)]
@@ -71,7 +66,6 @@ pub(crate) struct GiveFunctionToSignature<'s> {
 #[derive(Debug, Clone)]
 pub(crate) enum SignatureAssignmentRhs<'s> {
     Take(TakeSignature<'s>),
-    Conjure(ConjureSignature<'s>),
     Define(DefineSignature<'s>),
     TakeFrom(TakeSignatureFrom<'s>),
     GiveSignatureToSignature(GiveSignatureToSignature<'s>),
@@ -90,14 +84,8 @@ pub(crate) struct TakeFunction<'s> {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct ConjureFunction<'s> {
-    pub(crate) signature: Signature<'s>,
-    pub(crate) dependencies: ConjureDependencies<'s>,
-}
-
-#[derive(Debug, Clone)]
 pub(crate) struct DefineFunction<'s> {
-    pub(crate) context: Context<'s>,
+    pub(crate) context: FunctionContext<'s>,
 }
 
 #[derive(Debug, Clone)]
@@ -123,7 +111,6 @@ pub(crate) struct GiveFunctionToFunction<'s> {
 #[derive(Debug, Clone)]
 pub(crate) enum FunctionAssignmentRhs<'s> {
     Take(TakeFunction<'s>),
-    Conjure(ConjureFunction<'s>),
     Define(DefineFunction<'s>),
     TakeFrom(TakeFunctionFrom<'s>),
     GiveSignatureToFunction(GiveSignatureToFunction<'s>),
@@ -147,7 +134,28 @@ pub(crate) struct GiveFunction<'s> {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum Statement<'s> {
+pub(crate) struct ConjureSignature<'s> {
+    pub(crate) signature: Signature<'s>,
+    pub(crate) dependencies: ConjureDependencies<'s>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ConjureFunction<'s> {
+    pub(crate) function: Function<'s>,
+    pub(crate) signature: Signature<'s>,
+    pub(crate) dependencies: ConjureDependencies<'s>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum SignatureStatement<'s> {
+    SignatureAssignment(SignatureAssignment<'s>),
+    FunctionAssignment(FunctionAssignment<'s>),
+    ConjureSignature(ConjureSignature<'s>),
+    ConjureFunction(ConjureFunction<'s>),
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum FunctionStatement<'s> {
     SignatureAssignment(SignatureAssignment<'s>),
     FunctionAssignment(FunctionAssignment<'s>),
     GiveSignature(GiveSignature<'s>),
@@ -155,7 +163,10 @@ pub(crate) enum Statement<'s> {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct Context<'s>(pub(crate) Vec<Statement<'s>>);
+pub(crate) struct SignatureContext<'s>(pub(crate) Vec<SignatureStatement<'s>>);
+
+#[derive(Debug, Clone)]
+pub(crate) struct FunctionContext<'s>(pub(crate) Vec<FunctionStatement<'s>>);
 
 impl<'s> Signature<'s> {
     pub(crate) fn as_str(self) -> &'s str {

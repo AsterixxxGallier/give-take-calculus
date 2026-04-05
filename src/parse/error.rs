@@ -10,7 +10,10 @@ pub(crate) enum ParseError<'s> {
     UnexpectedIndentation {
         indentation: SourceLocation<'s>,
     },
-    ExpectedStatement {
+    ExpectedSignatureStatement {
+        location: SourceLocation<'s>,
+    },
+    ExpectedFunctionStatement {
         location: SourceLocation<'s>,
     },
     ExpectedSignatureOrFunction {
@@ -26,12 +29,6 @@ pub(crate) enum ParseError<'s> {
         location: SourceLocation<'s>,
     },
     ExpectedEndOfLine {
-        location: SourceLocation<'s>,
-    },
-    ExpectedAsOrEndOfLine {
-        location: SourceLocation<'s>,
-    },
-    ExpectedFromOrEndOfLine {
         location: SourceLocation<'s>,
     },
     ExpectedEquals {
@@ -52,9 +49,6 @@ pub(crate) enum ParseError<'s> {
     ExpectedFromOrSignatureOrEndOfLine {
         location: SourceLocation<'s>,
     },
-    ExpectedFromOrSignature {
-        location: SourceLocation<'s>,
-    },
     ExpectedFromOrSignatureOrFunction {
         location: SourceLocation<'s>,
     },
@@ -62,6 +56,12 @@ pub(crate) enum ParseError<'s> {
         location: SourceLocation<'s>,
     },
     ExpectedFrom {
+        location: SourceLocation<'s>,
+    },
+    ExpectedUsingOrFunctionOrEndOfLine {
+        location: SourceLocation<'s>,
+    },
+    ExpectedFunctionOrEndOfLine {
         location: SourceLocation<'s>,
     },
 }
@@ -102,8 +102,11 @@ impl<'s> ParseError<'s> {
             ParseError::UnexpectedIndentation { indentation } => {
                 simple_report(indentation, "unexpected indentation")
             }
-            ParseError::ExpectedStatement { location } => {
-                simple_report(location, "expected statement")
+            ParseError::ExpectedSignatureStatement { location } => {
+                simple_report(location, "expected assignment or 'conjure' keyword")
+            }
+            ParseError::ExpectedFunctionStatement { location } => {
+                simple_report(location, "expected assignment or 'give' keyword")
             }
             ParseError::ExpectedSignatureOrFunction { location } => {
                 simple_report(location, "expected signature or function")
@@ -119,12 +122,6 @@ impl<'s> ParseError<'s> {
             }
             ParseError::ExpectedEndOfLine { location } => {
                 simple_report(location, "expected end of line")
-            }
-            ParseError::ExpectedAsOrEndOfLine { location } => {
-                simple_report(location, "expected 'as' keyword or end of line")
-            }
-            ParseError::ExpectedFromOrEndOfLine { location } => {
-                simple_report(location, "expected 'from' keyword or end of line")
             }
             ParseError::ExpectedUsingOrEndOfLine { location } => {
                 simple_report(location, "expected 'using' keyword or end of line")
@@ -146,14 +143,18 @@ impl<'s> ParseError<'s> {
                 location,
                 "expected 'from' keyword, signature or end of line",
             ),
-            ParseError::ExpectedFromOrSignature { location } => {
-                simple_report(location, "expected 'from' keyword or signature")
-            }
             ParseError::ExpectedFromOrSignatureOrFunction { location } => {
                 simple_report(location, "expected 'from' keyword, signature or function")
             }
             ParseError::ExpectedFrom { location } => {
                 simple_report(location, "expected 'from' keyword")
+            }
+            ParseError::ExpectedUsingOrFunctionOrEndOfLine { location } => simple_report(
+                location,
+                "expected 'using' keyword, function or end of line",
+            ),
+            ParseError::ExpectedFunctionOrEndOfLine { location } => {
+                simple_report(location, "expected function or end of line")
             }
         }
     }

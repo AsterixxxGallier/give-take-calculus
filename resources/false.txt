@@ -2,8 +2,7 @@
   (p) = take
   (q) = take
   p = take (p)
-  q = conjure (q)
-  give q
+  conjure (q) q
 
 (iff) = define
   (p) = take
@@ -12,21 +11,17 @@
   (p_q) = give (q) to (p_implies)
   (q_implies) = give (q) as (p) to (implies)
   (q_p) = give (p) as (q) to (q_implies)
-  p_q = conjure (p_q)
-  q_p = conjure (q_p)
-  give p_q
-  give q_p
+  conjure (p_q) p_q
+  conjure (q_p) q_p
 
 (false) = define
   (p) = take
-  p = conjure (p)
-  give p
+  conjure (p) p
 
 (not) = define
   (p) = take
   p = take (p)
-  false = conjure (false)
-  give false
+  conjure (false) false
 
 not_apply = define
   (p) = take
@@ -42,8 +37,7 @@ not_apply = define
   (not_p) = give (p) to (not)
   (not_not_p) = give (not_p) as (p) to (not)
   not_not_p = take (not_not_p)
-  p = conjure (p)
-  give p
+  conjure (p) p
 
 # axiom
 not_not = take (not_not)
