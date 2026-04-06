@@ -19,6 +19,8 @@ fn main() {
             // println!("{:#?}", context);
 
             check_function_context(context).unwrap();
+
+            println!("checking successful");
         }
         Err(error) => {
             error

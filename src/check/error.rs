@@ -103,4 +103,10 @@ pub(crate) enum CheckError<'s> {
         function: Function<'s>,
         statement: SourceLocation<'s>,
     },
+    FunctionGivenToFunctionDoesNotHaveExpectedSignature {
+        statement: SourceLocation<'s>,
+        function: Function<'s>,
+        foreign: ForeignFunction<'s>,
+        source: Function<'s>,
+    },
 }

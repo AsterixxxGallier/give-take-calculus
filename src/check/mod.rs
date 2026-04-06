@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::mem;
 
 mod error;
+pub(crate) mod format;
 mod id;
 
 pub(crate) use error::*;
@@ -31,67 +32,69 @@ id!(SignatureId);
 id!(FunctionId);
 
 #[derive(Clone, Default, Eq, PartialEq)]
-struct KnownSignatureValue<'s> {
+pub(crate) struct KnownSignatureValue<'s> {
     conjured_signatures: OrderMap<SignatureId, SignatureConjuration<'s>>,
     conjured_functions: OrderMap<FunctionId, FunctionConjuration<'s>>,
     conjured_signature_ids: HashMap<&'s str, SignatureId>,
     conjured_function_ids: HashMap<&'s str, FunctionId>,
     conjured_signature_names: HashMap<SignatureId, &'s str>,
     conjured_function_names: HashMap<FunctionId, &'s str>,
-    taken_signature_ids: HashMap<&'s str, SignatureId>,
-    taken_function_ids: HashMap<&'s str, FunctionId>,
+    taken_signature_ids: OrderMap<&'s str, SignatureId>,
+    taken_function_ids: OrderMap<&'s str, FunctionId>,
+    taken_function_signatures: OrderMap<FunctionId, SignatureValue<'s>>,
 }
 
 #[derive(Clone, Default, Eq, PartialEq)]
-struct KnownFunctionValue<'s> {
+pub(crate) struct KnownFunctionValue<'s> {
     given_signatures: OrderMap<SignatureId, SignatureLambda<'s>>,
     given_functions: OrderMap<FunctionId, FunctionLambda<'s>>,
     given_signature_ids: HashMap<&'s str, SignatureId>,
     given_function_ids: HashMap<&'s str, FunctionId>,
     given_signature_names: HashMap<SignatureId, &'s str>,
     given_function_names: HashMap<FunctionId, &'s str>,
-    taken_signature_ids: HashMap<&'s str, SignatureId>,
-    taken_function_ids: HashMap<&'s str, FunctionId>,
+    taken_signature_ids: OrderMap<&'s str, SignatureId>,
+    taken_function_ids: OrderMap<&'s str, FunctionId>,
+    taken_function_signatures: OrderMap<FunctionId, SignatureValue<'s>>,
 }
 
 #[derive(Clone, Eq, PartialEq)]
-struct SignatureConjuration<'s> {
+pub(crate) struct SignatureConjuration<'s> {
     dependencies: LambdaDependencies<'s>,
 }
 
 #[derive(Clone, Eq, PartialEq)]
-struct FunctionConjuration<'s> {
+pub(crate) struct FunctionConjuration<'s> {
     signature: SignatureValue<'s>,
     // must also contain all dependencies of signature
     dependencies: LambdaDependencies<'s>,
 }
 
 #[derive(Clone, Eq, PartialEq)]
-struct SignatureLambda<'s> {
+pub(crate) struct SignatureLambda<'s> {
     signature: SignatureValue<'s>,
     dependencies: LambdaDependencies<'s>,
 }
 
 #[derive(Clone, Eq, PartialEq)]
-struct FunctionLambda<'s> {
+pub(crate) struct FunctionLambda<'s> {
     function: FunctionValue<'s>,
     dependencies: LambdaDependencies<'s>,
 }
 
 #[derive(Clone, Eq, PartialEq, Default)]
-struct LambdaDependencies<'s> {
+pub(crate) struct LambdaDependencies<'s> {
     signatures: OrderSet<SignatureId>,
     functions: OrderMap<FunctionId, SignatureValue<'s>>,
 }
 
 #[derive(Clone, Eq, PartialEq)]
-struct LambdaDependencyValues<'s> {
+pub(crate) struct LambdaDependencyValues<'s> {
     signatures: OrderMap<SignatureId, SignatureValue<'s>>,
     functions: OrderMap<FunctionId, FunctionValue<'s>>,
 }
 
 #[derive(Clone, Eq, PartialEq)]
-struct ConjuredSignatureValue<'s> {
+pub(crate) struct ConjuredSignatureValue<'s> {
     unknown_function: UnknownFunctionValue<'s>,
     unknown_function_signature: KnownSignatureValue<'s>,
     conjured_signature: SignatureId,
@@ -99,7 +102,7 @@ struct ConjuredSignatureValue<'s> {
 }
 
 #[derive(Clone, Eq, PartialEq)]
-struct ConjuredFunctionValue<'s> {
+pub(crate) struct ConjuredFunctionValue<'s> {
     unknown_function: UnknownFunctionValue<'s>,
     unknown_function_signature: KnownSignatureValue<'s>,
     conjured_function: FunctionId,
@@ -108,25 +111,25 @@ struct ConjuredFunctionValue<'s> {
 }
 
 #[derive(Clone, Eq, PartialEq)]
-enum UnknownSignatureValue<'s> {
+pub(crate) enum UnknownSignatureValue<'s> {
     Taken(SignatureId),
     Conjured(Box<ConjuredSignatureValue<'s>>),
 }
 
 #[derive(Clone, Eq, PartialEq)]
-enum UnknownFunctionValue<'s> {
+pub(crate) enum UnknownFunctionValue<'s> {
     Taken(FunctionId, SignatureValue<'s>),
     Conjured(Box<ConjuredFunctionValue<'s>>),
 }
 
 #[derive(Clone, Eq, PartialEq)]
-enum SignatureValue<'s> {
+pub(crate) enum SignatureValue<'s> {
     Known(KnownSignatureValue<'s>),
     Unknown(UnknownSignatureValue<'s>),
 }
 
 #[derive(Clone, Eq, PartialEq)]
-enum FunctionValue<'s> {
+pub(crate) enum FunctionValue<'s> {
     Known(KnownFunctionValue<'s>),
     Unknown(UnknownFunctionValue<'s>),
 }
@@ -646,31 +649,6 @@ impl<'s> LambdaDependencies<'s> {
     }
 }
 
-// I don't think this ever made sense
-/*impl<'s> KnownSignatureValue<'s> {
-    fn collect_dependencies(&self, dependencies: &mut LambdaDependencies<'s>) {
-        for conjuration in self.conjured_signatures.values() {
-            dependencies.add(&conjuration.dependencies);
-        }
-
-        for conjuration in self.conjured_functions.values() {
-            dependencies.add(&conjuration.dependencies);
-        }
-    }
-}
-
-impl<'s> KnownFunctionValue<'s> {
-    fn collect_dependencies(&self, dependencies: &mut LambdaDependencies<'s>) {
-        for lambda in self.given_signatures.values() {
-            dependencies.add(&lambda.dependencies);
-        }
-
-        for lambda in self.given_functions.values() {
-            dependencies.add(&lambda.dependencies);
-        }
-    }
-}*/
-
 pub(crate) fn check_function_context(context: FunctionContext) -> Result<(), CheckError> {
     let mut state = EvaluationState::default();
     state.evaluate_function_context(context)?;
@@ -686,6 +664,8 @@ struct EvaluationState<'s> {
     function_lambdas: HashMap<FunctionId, FunctionLambda<'s>>,
     signature_ids: HashMap<&'s str, SignatureId>,
     function_ids: HashMap<&'s str, FunctionId>,
+    signature_names: HashMap<SignatureId, Signature<'s>>,
+    function_names: HashMap<FunctionId, Function<'s>>,
     dependencies: LambdaDependencies<'s>,
 }
 
@@ -788,7 +768,7 @@ impl<'s> EvaluationState<'s> {
                         functions: OrderMap::new(),
                     },
                 }
-            },
+            }
             SignatureAssignmentRhs::Define(DefineSignature { context }) => {
                 let (signature, dependencies) =
                     self.do_as_child(|child| child.evaluate_signature_context(context));
@@ -808,13 +788,8 @@ impl<'s> EvaluationState<'s> {
                 match source_function {
                     FunctionValue::Known(KnownFunctionValue {
                                              given_signatures,
-                                             given_functions: _,
                                              given_signature_ids,
-                                             given_function_ids: _,
-                                             given_signature_names: _,
-                                             given_function_names: _,
-                                             taken_signature_ids: _,
-                                             taken_function_ids: _,
+                                             ..
                                          }) => {
                         let foreign_id =
                             if let Some(&id) = given_signature_ids.get(foreign.as_str()) {
@@ -943,37 +918,26 @@ impl<'s> EvaluationState<'s> {
                             });
                         };
 
+                        let expected_signature =
+                            &source_value.taken_function_signatures[&foreign_id];
+                        if !expected_signature.describes(&function_value) {
+                            return Err(
+                                CheckError::FunctionGivenToSignatureDoesNotHaveExpectedSignature {
+                                    statement: location,
+                                    function,
+                                    foreign,
+                                    source,
+                                },
+                            );
+                        }
+
                         for conjuration in source_value.conjured_signatures.values_mut() {
                             // foreign won't be a dependency of _all_ conjurations,
                             // so it's okay if it's not in the set here
-                            if let Some(expected_signature) =
-                                conjuration.dependencies.functions.get(&foreign_id)
-                            {
-                                if !expected_signature.describes(&function_value) {
-                                    return Err(CheckError::FunctionGivenToSignatureDoesNotHaveExpectedSignature {
-                                        statement: location,
-                                        function,
-                                        foreign,
-                                        source,
-                                    });
-                                }
-                            }
                             _ = conjuration.dependencies.functions.remove(&foreign_id);
                         }
 
                         for conjuration in source_value.conjured_functions.values_mut() {
-                            if let Some(expected_signature) =
-                                conjuration.dependencies.functions.get(&foreign_id)
-                            {
-                                if !expected_signature.describes(&function_value) {
-                                    return Err(CheckError::FunctionGivenToSignatureDoesNotHaveExpectedSignature {
-                                        statement: location,
-                                        function,
-                                        foreign,
-                                        source,
-                                    });
-                                }
-                            }
                             _ = conjuration.dependencies.functions.remove(&foreign_id);
                             conjuration
                                 .signature
@@ -1007,7 +971,7 @@ impl<'s> EvaluationState<'s> {
     fn process_function_assignment(
         &mut self,
         assignment: FunctionAssignment<'s>,
-        mut register_taken_function: impl FnMut(Function<'s>, FunctionId),
+        mut register_taken_function: impl FnMut(Function<'s>, FunctionId, &SignatureValue<'s>),
     ) -> CheckResult<'s, ()> {
         let FunctionAssignment { lhs, rhs, location } = assignment;
 
@@ -1015,13 +979,13 @@ impl<'s> EvaluationState<'s> {
 
         let lambda = match rhs {
             FunctionAssignmentRhs::Take(TakeFunction { signature }) => {
-                register_taken_function(lhs, lhs_id);
-
                 let signature_id = self.resolve_signature(signature)?;
                 let SignatureLambda {
                     signature,
                     dependencies: signature_dependencies,
                 } = self.signature_lambda(signature_id);
+
+                register_taken_function(lhs, lhs_id, &signature);
 
                 let unknown_function = UnknownFunctionValue::Taken(lhs_id, signature.clone());
 
@@ -1082,6 +1046,7 @@ impl<'s> EvaluationState<'s> {
                         given_function_names: signature.conjured_function_names,
                         taken_signature_ids: signature.taken_signature_ids,
                         taken_function_ids: signature.taken_function_ids,
+                        taken_function_signatures: signature.taken_function_signatures,
                     }),
                     SignatureValue::Unknown(_) => FunctionValue::Unknown(unknown_function),
                 };
@@ -1109,14 +1074,9 @@ impl<'s> EvaluationState<'s> {
 
                 match source_function {
                     FunctionValue::Known(KnownFunctionValue {
-                                             given_signatures: _,
                                              given_functions,
-                                             given_signature_ids: _,
                                              given_function_ids,
-                                             given_signature_names: _,
-                                             given_function_names: _,
-                                             taken_signature_ids: _,
-                                             taken_function_ids: _,
+                                             ..
                                          }) => {
                         let foreign_id = if let Some(&id) = given_function_ids.get(foreign.as_str())
                         {
@@ -1222,7 +1182,7 @@ impl<'s> EvaluationState<'s> {
                                                           }) => {
                 let function_id = self.resolve_function(function)?;
                 let FunctionLambda {
-                    function,
+                    function: function_value,
                     dependencies: function_dependencies,
                 } = self.function_lambda(function_id);
 
@@ -1246,18 +1206,31 @@ impl<'s> EvaluationState<'s> {
                             });
                         };
 
-                        for conjuration in source_value.given_functions.values_mut() {
-                            _ = conjuration.dependencies.functions.remove(&foreign_id);
-                            conjuration
-                                .function
-                                .substitute_taken_function(foreign_id, &function);
+                        let expected_signature =
+                            &source_value.taken_function_signatures[&foreign_id];
+                        if !expected_signature.describes(&function_value) {
+                            return Err(
+                                CheckError::FunctionGivenToFunctionDoesNotHaveExpectedSignature {
+                                    statement: location,
+                                    function,
+                                    foreign,
+                                    source,
+                                },
+                            );
                         }
 
                         for conjuration in source_value.given_functions.values_mut() {
                             _ = conjuration.dependencies.functions.remove(&foreign_id);
                             conjuration
                                 .function
-                                .substitute_taken_function(foreign_id, &function);
+                                .substitute_taken_function(foreign_id, &function_value);
+                        }
+
+                        for conjuration in source_value.given_functions.values_mut() {
+                            _ = conjuration.dependencies.functions.remove(&foreign_id);
+                            conjuration
+                                .function
+                                .substitute_taken_function(foreign_id, &function_value);
                         }
 
                         let mut dependencies = function_dependencies;
@@ -1294,12 +1267,19 @@ impl<'s> EvaluationState<'s> {
             match statement {
                 SignatureStatement::SignatureAssignment(assignment) => {
                     self.process_signature_assignment(assignment, |signature, id| {
-                        context_value.taken_signature_ids.insert(signature.as_str(), id);
+                        context_value
+                            .taken_signature_ids
+                            .insert(signature.as_str(), id);
                     })?;
                 }
                 SignatureStatement::FunctionAssignment(assignment) => {
-                    self.process_function_assignment(assignment, |function, id| {
-                        context_value.taken_function_ids.insert(function.as_str(), id);
+                    self.process_function_assignment(assignment, |function, id, signature| {
+                        context_value
+                            .taken_function_ids
+                            .insert(function.as_str(), id);
+                        context_value
+                            .taken_function_signatures
+                            .insert(id, signature.clone());
                     })?;
                 }
                 SignatureStatement::ConjureSignature(ConjureSignature {
@@ -1419,12 +1399,19 @@ impl<'s> EvaluationState<'s> {
             match statement {
                 FunctionStatement::SignatureAssignment(assignment) => {
                     self.process_signature_assignment(assignment, |signature, id| {
-                        context_value.taken_signature_ids.insert(signature.as_str(), id);
+                        context_value
+                            .taken_signature_ids
+                            .insert(signature.as_str(), id);
                     })?;
                 }
                 FunctionStatement::FunctionAssignment(assignment) => {
-                    self.process_function_assignment(assignment, |function, id| {
-                        context_value.taken_function_ids.insert(function.as_str(), id);
+                    self.process_function_assignment(assignment, |function, id, signature| {
+                        context_value
+                            .taken_function_ids
+                            .insert(function.as_str(), id);
+                        context_value
+                            .taken_function_signatures
+                            .insert(id, signature.clone());
                     })?;
                 }
                 FunctionStatement::GiveSignature(GiveSignature {

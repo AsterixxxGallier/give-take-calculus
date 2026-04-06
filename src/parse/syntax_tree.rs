@@ -1,4 +1,5 @@
 use crate::parse::SourceLocation;
+use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 
 #[derive(Debug, Copy, Clone)]
@@ -173,6 +174,36 @@ pub(crate) struct SignatureContext<'s>(pub(crate) Vec<SignatureStatement<'s>>);
 
 #[derive(Debug, Clone)]
 pub(crate) struct FunctionContext<'s>(pub(crate) Vec<FunctionStatement<'s>>);
+
+impl<'s> Display for Signature<'s> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.with_parens.as_str())
+    }
+}
+
+impl<'s> Display for Function<'s> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.symbol.as_str())
+    }
+}
+
+impl<'s> Display for ForeignSignature<'s> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ForeignSignature::Explicit(signature) => signature.fmt(f),
+            ForeignSignature::Implicit(signature) => signature.fmt(f),
+        }
+    }
+}
+
+impl<'s> Display for ForeignFunction<'s> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ForeignFunction::Explicit(function) => function.fmt(f),
+            ForeignFunction::Implicit(function) => function.fmt(f),
+        }
+    }
+}
 
 impl<'s> Signature<'s> {
     pub(crate) fn as_str(self) -> &'s str {

@@ -42,5 +42,66 @@ not_apply = define
 # axiom
 not_not = take (not_not)
 
-give (iff)
-give not_apply
+contraposition = define
+  (p) = take
+  (q) = take
+
+  (p_implies) = give (p) to (implies)
+  (p_q) = give (q) to (p_implies)
+
+  (not_p) = give (p) to (not)
+  (not_q) = give (q) as (p) to (not)
+
+  p_q = take (p_q)
+  not_q = take (not_q)
+
+  not_p = define
+    p = take (p)
+    q_ = give p to p_q
+    q = take from q_
+    false_ = give q as p to not_q
+    false = take from false_
+    give false
+
+  give not_p
+
+contraposition_reverse = define
+  (p) = take
+  (q) = take
+
+  (not_p) = give (p) to (not)
+  (not_q) = give (q) as (p) to (not)
+
+  (contra_) = give (not_q) as (p) to (implies)
+  (contra) = give (not_p) as (q) to (contra_)
+
+  (not_not_q) = give (not_q) as (p) to (not)
+
+  contra = take (contra)
+  p = take (p)
+
+  not_q_not_p = define
+    not_q = take (not_q)
+    contra = give not_q as p to contra
+    not_p = take q from contra
+    give not_p
+
+  not_not_p = define
+    not_p = take (not_p)
+    not_p = give p to not_p
+    false = take from not_p
+    give false
+
+  contraposition = give (not_q) as (p) to contraposition
+  contraposition = give (not_p) as (q) to contraposition
+
+  contraposition = give not_q_not_p as p_q to contraposition
+  contraposition = give not_not_p as not_q to contraposition
+
+  not_not_q = take q from contraposition
+
+  not_not = give (q) as (p) to not_not
+  not_not = give not_not_q as not_not_p to not_not
+  q = take p from not_not
+
+  give q
