@@ -76,6 +76,7 @@ pub(crate) enum SignatureAssignmentRhs<'s> {
 pub(crate) struct SignatureAssignment<'s> {
     pub(crate) lhs: Signature<'s>,
     pub(crate) rhs: SignatureAssignmentRhs<'s>,
+    pub(crate) location: SourceLocation<'s>,
 }
 
 #[derive(Debug, Clone)]
@@ -121,22 +122,26 @@ pub(crate) enum FunctionAssignmentRhs<'s> {
 pub(crate) struct FunctionAssignment<'s> {
     pub(crate) lhs: Function<'s>,
     pub(crate) rhs: FunctionAssignmentRhs<'s>,
+    pub(crate) location: SourceLocation<'s>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct GiveSignature<'s> {
     pub(crate) signature: Signature<'s>,
+    pub(crate) location: SourceLocation<'s>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct GiveFunction<'s> {
     pub(crate) function: Function<'s>,
+    pub(crate) location: SourceLocation<'s>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct ConjureSignature<'s> {
     pub(crate) signature: Signature<'s>,
     pub(crate) dependencies: ConjureDependencies<'s>,
+    pub(crate) location: SourceLocation<'s>,
 }
 
 #[derive(Debug, Clone)]
@@ -144,6 +149,7 @@ pub(crate) struct ConjureFunction<'s> {
     pub(crate) function: Function<'s>,
     pub(crate) signature: Signature<'s>,
     pub(crate) dependencies: ConjureDependencies<'s>,
+    pub(crate) location: SourceLocation<'s>,
 }
 
 #[derive(Debug, Clone)]

@@ -1,333 +1,65 @@
-struct Context {
-    assignments: Vec<Assignment>,
-    given_signatures: Vec<SignatureId>,
-    given_functions: Vec<FunctionId>,
-}
-
-enum Assignment {
-    Signature(SignatureAssignment),
-    Function(FunctionAssignment),
-}
-
-struct SignatureAssignment {
-    lhs: SignatureId,
-    rhs: Signature,
-    location: SourceLocation,
-}
-
-struct FunctionAssignment {
-    lhs: FunctionId,
-    rhs: Function,
-    location: SourceLocation,
-}
-
-enum Signature {
-
-}
-
 (implies) = define
   (p) = take
-  # (p) = Lambda (p). (p)
   (q) = take
-  # (q) = Lambda (q). (q)
   p = take (p)
-  # p = Lambda (p) p. p & p is (p)
-  q = conjure (q) using p
-  # q = Lambda (p) (q) p. conjure (q) using p & p is (p)
-  give q
-  # as q give Lambda (p) (q) p. conjure (q) using p & p is (p)
+  conjure (q) q using p
+
+(implies) = define
+  q => Lambda (p) (q) p. conjure (q) using p & p is (p)
 
 (iff) = define
-  (P) = take
-  # (P) = Lambda (P). (P)
-  (Q) = take
-  # (Q) = Lambda (Q). (Q)
-  (P_implies) = give (P) to (implies)
-  # (P_implies) = Lambda (P). as q give Lambda (q) p. conjure (q) using p & p is (P)
-  (P_Q) = give (Q) to (P_implies)
-  # (P_Q) = Lambda (P) (Q). as q give Lambda p. conjure (Q) using p & p is (P)
-  (Q_implies) = give (Q) as (P) to (implies)
-  # (Q_implies) = Lambda (Q). as q give Lambda (q) p. conjure (q) using p & p is (Q)
-  (Q_P) = give (P) as (Q) to (Q_implies)
-  # (Q_P) = Lambda (P) (Q). as q give Lambda p. conjure (P) using p & p is (Q)
-  P_Q = conjure (P_Q)
-  # P_Q = Lambda (P) (Q). conjure { as q give Lambda p. conjure (Q) using p & p is (P) }
-  Q_P = conjure (Q_P)
-  # Q_P = Lambda (P) (Q). conjure { as q give Lambda p. conjure (P) using p & p is (Q) }
-  give P_Q
-  # as P_Q give Lambda (P) (Q). conjure { as q give Lambda p. conjure (Q) using p & p is (P) }
-  give Q_P
-  # as Q_P give Lambda (P) (Q). conjure { as q give Lambda p. conjure (P) using p & p is (Q) }
+  (p) = take
+  (q) = take
+  (p_implies) = give (p) to (implies)
+  (p_q) = give (q) to (p_implies)
+  (q_implies) = give (q) as (p) to (implies)
+  (q_p) = give (p) as (q) to (q_implies)
+  conjure (p_q) p_q
+  conjure (q_p) q_p
+
+(iff) = define
+  p_q => Lambda (p) (q). Lambda p. conjure (q) using p & p is (p)
+  q_p => Lambda (p) (q). Lambda p. conjure (p) using p & p is (q)
 
 (false) = define
   (p) = take
-  # (p) = Lambda (p). (p)
-  p = conjure (p)
-  # p = Lambda (p). conjure (p)
-  give p
-  # as p give Lambda (p). conjure (p)
-
-(not) = define
-  (p) = take
-  # (p) = Lambda (p). (p)
-  p = take (p)
-  # p = Lambda (p) p. p & p is (p)
-  false = conjure (false) using p
-  # false = Lambda (p) p. conjure { as p give Lambda (p). conjure (p) } & p is (p)
-  give false
-  # as false give Lambda (p) p. conjure { as p give Lambda (p). conjure (p) } & p is (p)
-
-not_apply = define
-  (p) = take
-  # (p) = Lambda (p). (p)
-  (not_p) = give (p) to (not)
-  # (not_p) = Lambda (p). as false give conjure { as p give Lambda (p). conjure (p) } & p is (p)
-  not_p = take (not_p)
-  # not_p = Lambda (p) not_p. not_p & p is (p) & not_p is { as false give conjure { as p give Lambda (p). conjure (p) } }
-  # not_p = Lambda (p) not_p. { as false give not_p @ conjure { as p give Lambda (p). conjure (p) } } & p is (p)
-  p = take (p)
-  # p = Lambda (p) p. p & p is (p)
-  not_p_but_p = give p to not_p
-  # not_p = Lambda (p) not_p. { as false give not_p @ conjure { as p give Lambda (p). conjure (p) } } & p is (p)
-  false = take from not_p_but_p
-  give false
-
-# (implies) = KnownSignatureValue {
-#     context: ContextValue {
-#         taken_signatures: ['(p)', '(q)'],
-#         taken_functions: ['p'],
-#         given_signatures: [],
-#         given_functions: [
-#             'q' => Lambda {
-#                 parameters: ['(p)', '(q)', 'p'],
-#                 inner: UnknownFunctionValue::ConjuredInThisSignature {
-#                     marker: 'q',
-#                     signature_dependencies: [],
-#                     function_dependencies: [
-#                         UnknownFunctionValue::Taken {
-#                             marker: 'p',
-#                             signature: UnknownSignatureValue::Taken {
-#                                 marker: '(p)',
-#                             },
-#                         },
-#                     ],
-#                     signature: UnknownSignatureValue::Taken {
-#                         marker: '(q)',
-#                     },
-#                 },
-#             },
-#         ],
-#     }
-# }
-
-(iff) = define
-  (P) = take
-  (Q) = take
-
-  # (P) = UnknownSignatureValue::Taken { marker: '(P)' }
-  # (Q) = UnknownSignatureValue::Taken { marker: '(Q)' }
-
-  (P_implies) = give (P) as (p) to (implies)
-
-  # (P_implies) = define
-  #   (p) = (P)
-  #   (q) = take
-  #   p = take (p)
-  #   q = conjure (q) using p
-  #   give q
-
-  # (P_implies) = KnownSignatureValue {
-  #     context: ContextValue {
-  #         taken_signatures: ['(q)'],
-  #         taken_functions: ['p'],
-  #         given_signatures: [],
-  #         given_functions: [
-  #             'q' => Lambda {
-  #                 parameters: ['(q)', 'p'],
-  #                 inner: UnknownFunctionValue::ConjuredInThisSignature {
-  #                     marker: 'q',
-  #                     signature_dependencies: [],
-  #                     function_dependencies: [
-  #                         UnknownFunctionValue::Taken {
-  #                             marker: 'p',
-  #                             signature: UnknownSignatureValue::Taken {
-  #                                 marker: '(P)',
-  #                             },
-  #                         },
-  #                     ],
-  #                     signature: UnknownSignatureValue::Taken {
-  #                         marker: '(q)',
-  #                     },
-  #                 },
-  #             },
-  #         ],
-  #     }
-  # }
-
-  (P_Q) = give (Q) as (q) to (p_implies)
-
-  # (P_Q) = define
-  #   (p) = (P)
-  #   (q) = (Q)
-  #   p = take (p)
-  #   q = conjure (q) using p
-  #   give q
-
-  # (P_Q) = KnownSignatureValue {
-  #     context: ContextValue {
-  #         taken_signatures: [],
-  #         taken_functions: ['p'],
-  #         given_signatures: [],
-  #         given_functions: [
-  #             'q' => Lambda {
-  #                 parameters: ['p'],
-  #                 inner: UnknownFunctionValue::ConjuredInThisSignature {
-  #                     marker: 'q',
-  #                     signature_dependencies: [],
-  #                     function_dependencies: [
-  #                         UnknownFunctionValue::Taken {
-  #                             marker: 'p',
-  #                             signature: UnknownSignatureValue::Taken {
-  #                                 marker: '(P)',
-  #                             },
-  #                         },
-  #                     ],
-  #                     signature: UnknownSignatureValue::Taken {
-  #                         marker: '(Q)',
-  #                     },
-  #                 },
-  #             },
-  #         ],
-  #     }
-  # }
-
-  (Q_implies) = give (Q) as (p) to (implies)
-
-  # (Q_implies) = KnownSignatureValue {
-  #     context: ContextValue {
-  #         taken_signatures: ['(q)'],
-  #         taken_functions: ['p'],
-  #         given_signatures: [],
-  #         given_functions: [
-  #             'q' => Lambda {
-  #                 parameters: ['(q)', 'p'],
-  #                 inner: UnknownFunctionValue::ConjuredInThisSignature {
-  #                     marker: 'q',
-  #                     signature_dependencies: [],
-  #                     function_dependencies: [
-  #                         UnknownFunctionValue::Taken {
-  #                             marker: 'p',
-  #                             signature: UnknownSignatureValue::Taken {
-  #                                 marker: '(Q)',
-  #                             },
-  #                         },
-  #                     ],
-  #                     signature: UnknownSignatureValue::Taken {
-  #                         marker: '(q)',
-  #                     },
-  #                 },
-  #             },
-  #         ],
-  #     }
-  # }
-
-  (Q_P) = give (P) as (q) to (Q_implies)
-
-  # (Q_P) = KnownSignatureValue {
-  #     context: ContextValue {
-  #         taken_signatures: [],
-  #         taken_functions: ['p'],
-  #         given_signatures: [],
-  #         given_functions: [
-  #             'q' => Lambda {
-  #                 parameters: ['p'],
-  #                 inner: UnknownFunctionValue::ConjuredInThisSignature {
-  #                     marker: 'q',
-  #                     signature_dependencies: [],
-  #                     function_dependencies: [
-  #                         UnknownFunctionValue::Taken {
-  #                             marker: 'p',
-  #                             signature: UnknownSignatureValue::Taken {
-  #                                 marker: '(Q)',
-  #                             },
-  #                         },
-  #                     ],
-  #                     signature: UnknownSignatureValue::Taken {
-  #                         marker: '(P)',
-  #                     },
-  #                 },
-  #             },
-  #         ],
-  #     }
-  # }
-
-  P_Q = conjure (P_Q)
-
-  # (P_Q) = UnknownFunctionWithKnownSignature {
-  #     bindings: [],
-  #     unknown_function: UnknownFunctionValue::ConjuredInThisSignature {
-  #         marker: 'P_Q',
-  #         signature: KnownSignatureValue {
-  #             context: ContextValue {
-  #                 taken_signatures: [],
-  #                 taken_functions: ['p'],
-  #                 given_signatures: [],
-  #                 given_functions: [
-  #                     'q' => Lambda {
-  #                         parameters: ['p'],
-  #                         inner: UnknownFunctionValue::ConjuredInThisSignature {
-  #                             marker: 'q',
-  #                             signature_dependencies: [],
-  #                             function_dependencies: [
-  #                                 UnknownFunctionValue::Taken {
-  #                                     marker: 'p',
-  #                                     signature: UnknownSignatureValue::Taken {
-  #                                         marker: '(P)',
-  #                                     },
-  #                                 },
-  #                             ],
-  #                             signature: UnknownSignatureValue::Taken {
-  #                                 marker: '(Q)',
-  #                             },
-  #                         },
-  #                     },
-  #                 ],
-  #             },
-  #         },
-  #     },
-  # }
-
-  Q_P = conjure (Q_P)
-  give P_Q
-  give Q_P
+  conjure (p) p
 
 (false) = define
-  (p) = take
-  p = conjure (p)
-  give p
+  p => Lambda (p). conjure (p)
 
 (not) = define
   (p) = take
   p = take (p)
-  false = conjure (false)
-  give false
+  conjure (false) false using p
+
+(not) = define
+  false => Lambda (p) p. conjure (false) using p & p is (p)
 
 not_apply = define
   (p) = take
+  # (p) := Lambda (p). (p)
   (not_p) = give (p) to (not)
+  # (not_p) := Lambda (p). { false => Lambda p. conjure (false) using p & p is (p) }
   not_p = take (not_p)
+  # not_p := Lambda (p) not_p. { false => Lambda p. [ (false) not_p.false with p := p ] & p is (p) } & not_p is (not_p)
   p = take (p)
+  # p := Lambda (p) p. p & p is (p)
   not_p_but_p = give p to not_p
+  # not_p_but_p := Lambda (p) p not_p. { false => [ (false) not_p.false with p := p ] } & not_p is (not_p)
   false = take from not_p_but_p
+  # false := Lambda (p) p not_p. [ (false) not_p.false with p := p ] & not_p is (not_p)
   give false
+
+not_apply = define
+  false => Lambda (p) p not_p. [ (false) not_p.false with p := p ] & not_p is (not_p)
 
 (not_not) = define
   (p) = take
   (not_p) = give (p) to (not)
   (not_not_p) = give (not_p) as (p) to (not)
   not_not_p = take (not_not_p)
-  p = conjure (p)
-  give p
+  conjure (p) p using not_not_p
 
 # axiom
 not_not = take (not_not)

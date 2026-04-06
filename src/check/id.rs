@@ -1,5 +1,5 @@
-use std::fmt::{Debug, Display, Formatter};
 use rand::random;
+use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub(super) struct Id(u64);

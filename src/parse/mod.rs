@@ -192,7 +192,10 @@ fn parse_maybe_as_function<'s>(
     }
 }
 
-fn parse_give_signature_statement(location: SourceLocation<'_>) -> ParseResult![FunctionStatement] {
+fn parse_give_signature_statement<'s>(
+    location: SourceLocation<'s>,
+    statement_location: SourceLocation<'s>,
+) -> ParseResult!['s, FunctionStatement] {
     let (location, signature) = parse_signature(location)?;
     let location = location.trim_start();
     if !location.is_empty() {
@@ -200,25 +203,35 @@ fn parse_give_signature_statement(location: SourceLocation<'_>) -> ParseResult![
     } else {
         Ok(FunctionStatement::GiveSignature(GiveSignature {
             signature,
+            location: statement_location,
         }))
     }
 }
 
-fn parse_give_function_statement(location: SourceLocation<'_>) -> ParseResult![FunctionStatement] {
+fn parse_give_function_statement<'s>(
+    location: SourceLocation<'s>,
+    statement_location: SourceLocation<'s>,
+) -> ParseResult!['s, FunctionStatement] {
     let (location, function) = parse_function(location)?;
     let location = location.trim_start();
     if !location.is_empty() {
         Err(ParseError::ExpectedEndOfLine { location })
     } else {
-        Ok(FunctionStatement::GiveFunction(GiveFunction { function }))
+        Ok(FunctionStatement::GiveFunction(GiveFunction {
+            function,
+            location: statement_location,
+        }))
     }
 }
 
-fn parse_give_statement(location: SourceLocation<'_>) -> ParseResult![FunctionStatement] {
+fn parse_give_statement<'s>(
+    location: SourceLocation<'s>,
+    statement_location: SourceLocation<'s>,
+) -> ParseResult!['s, FunctionStatement] {
     if location.starts_with('(') {
-        parse_give_signature_statement(location)
+        parse_give_signature_statement(location, statement_location)
     } else if location.starts_with(is_symbol_char) {
-        parse_give_function_statement(location)
+        parse_give_function_statement(location, statement_location)
     } else {
         Err(ParseError::ExpectedSignatureOrFunction { location })
     }
@@ -518,12 +531,17 @@ fn parse_signature_assignment_statement<'s>(
     location: SourceLocation<'s>,
     following_lines: SourceLocationLines<'s>,
 ) -> LinesParseResult!['s, SignatureAssignment] {
+    let statement_location = location.trim();
     let (location, lhs) = parse_signature(location)?;
     let location = location.trim_start();
     let location = parse_equals(location)?;
     let location = location.trim_start();
     let (following_lines, rhs) = parse_signature_assignment_rhs(location, following_lines, lhs)?;
-    let statement = SignatureAssignment { lhs, rhs };
+    let statement = SignatureAssignment {
+        lhs,
+        rhs,
+        location: statement_location,
+    };
     Ok((following_lines, statement))
 }
 
@@ -531,16 +549,24 @@ fn parse_function_assignment_statement<'s>(
     location: SourceLocation<'s>,
     following_lines: SourceLocationLines<'s>,
 ) -> LinesParseResult!['s, FunctionAssignment] {
+    let statement_location = location.trim();
     let (location, lhs) = parse_function(location)?;
     let location = location.trim_start();
     let location = parse_equals(location)?;
     let location = location.trim_start();
     let (following_lines, rhs) = parse_function_assignment_rhs(location, following_lines, lhs)?;
-    let statement = FunctionAssignment { lhs, rhs };
+    let statement = FunctionAssignment {
+        lhs,
+        rhs,
+        location: statement_location,
+    };
     Ok((following_lines, statement))
 }
 
-fn parse_conjure_statement(location: SourceLocation<'_>) -> ParseResult![SignatureStatement] {
+fn parse_conjure_statement<'s>(
+    location: SourceLocation<'s>,
+    statement_location: SourceLocation<'s>,
+) -> ParseResult!['s, SignatureStatement] {
     let (location, signature) = parse_signature(location)?;
     let location = location.trim_start();
     let (location, function) = if location.starts_with("using") || location.is_empty() {
@@ -562,11 +588,13 @@ fn parse_conjure_statement(location: SourceLocation<'_>) -> ParseResult![Signatu
             function,
             signature,
             dependencies,
+            location: statement_location,
         }))
     } else {
         Ok(SignatureStatement::ConjureSignature(ConjureSignature {
             signature,
             dependencies,
+            location: statement_location,
         }))
     }
 }
@@ -576,13 +604,14 @@ fn parse_signature_statement(
 ) -> LinesParseResult![SignatureStatement] {
     let line = location.first().expect("should not be empty");
     let line = line.trim_start();
+    let statement_location = line.trim();
 
     let location = location.advance().expect("should not be empty");
     if let Some(line) = line.take_prefix("give") {
         Err(ParseError::GiveInSignatureContext { location: line })
     } else if let Some(line) = line.strip_prefix("conjure") {
         let line = line.trim_start();
-        let statement = parse_conjure_statement(line)?;
+        let statement = parse_conjure_statement(line, statement_location)?;
         Ok((location, statement))
     } else if line.starts_with('(') {
         let (location, statement) = parse_signature_assignment_statement(line, location)?;
@@ -602,13 +631,14 @@ fn parse_function_statement(
 ) -> LinesParseResult![FunctionStatement] {
     let line = location.first().expect("should not be empty");
     let line = line.trim_start();
+    let statement_location = line.trim();
 
     let location = location.advance().expect("should not be empty");
     if let Some(line) = line.take_prefix("conjure") {
         Err(ParseError::ConjureInFunctionContext { location: line })
     } else if let Some(line) = line.strip_prefix("give") {
         let line = line.trim_start();
-        let statement = parse_give_statement(line)?;
+        let statement = parse_give_statement(line, statement_location)?;
         Ok((location, statement))
     } else if line.starts_with('(') {
         let (location, statement) = parse_signature_assignment_statement(line, location)?;
