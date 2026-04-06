@@ -75,7 +75,7 @@ fn skip_empty_lines(mut location: SourceLocationLines) -> Option<SourceLocationL
 }
 
 fn is_symbol_char(char: char) -> bool {
-    !char.is_whitespace() && char != '\'' && char != '(' && char != ')' && char != '='
+    !char.is_whitespace() && char != '(' && char != ')' && char != '='
 }
 
 fn parse_symbol(location: SourceLocation<'_>) -> LocationParseResult![SourceLocation] {
