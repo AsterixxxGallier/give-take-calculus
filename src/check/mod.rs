@@ -1,6 +1,7 @@
 use crate::parse::*;
 use ordermap::{OrderMap, OrderSet};
 use std::collections::HashMap;
+use std::io::Write;
 use std::mem;
 
 mod error;
@@ -649,13 +650,34 @@ impl<'s> LambdaDependencies<'s> {
     }
 }
 
-pub(crate) fn check_function_context(context: FunctionContext) -> Result<(), CheckError> {
+pub(crate) fn check_function_context(context: FunctionContext, out: &mut dyn Write) -> bool {
+    let mut resolver = Resolver::default();
     let mut state = EvaluationState::default();
-    state.evaluate_function_context(context)?;
-    Ok(())
+    if let Err(error) = state.evaluate_function_context(context, &mut resolver) {
+        error.print(&resolver, out).unwrap();
+        false
+    } else {
+        true
+    }
 }
 
 type CheckResult<'s, T> = Result<T, CheckError<'s>>;
+
+#[derive(Default)]
+struct Resolver<'s> {
+    signatures: HashMap<SignatureId, Signature<'s>>,
+    functions: HashMap<FunctionId, Function<'s>>,
+}
+
+impl<'s> Resolver<'s> {
+    fn signature(&self, id: SignatureId) -> Signature<'s> {
+        self.signatures[&id]
+    }
+
+    fn function(&self, id: FunctionId) -> Function<'s> {
+        self.functions[&id]
+    }
+}
 
 #[derive(Default)]
 struct EvaluationState<'s> {
@@ -664,8 +686,6 @@ struct EvaluationState<'s> {
     function_lambdas: HashMap<FunctionId, FunctionLambda<'s>>,
     signature_ids: HashMap<&'s str, SignatureId>,
     function_ids: HashMap<&'s str, FunctionId>,
-    signature_names: HashMap<SignatureId, Signature<'s>>,
-    function_names: HashMap<FunctionId, Function<'s>>,
     dependencies: LambdaDependencies<'s>,
 }
 
@@ -752,6 +772,7 @@ impl<'s> EvaluationState<'s> {
     fn process_signature_assignment(
         &mut self,
         assignment: SignatureAssignment<'s>,
+        resolver: &mut Resolver<'s>,
         mut register_taken_signature: impl FnMut(Signature<'s>, SignatureId),
     ) -> CheckResult<'s, ()> {
         let SignatureAssignment { location, lhs, rhs } = assignment;
@@ -771,7 +792,7 @@ impl<'s> EvaluationState<'s> {
             }
             SignatureAssignmentRhs::Define(DefineSignature { context }) => {
                 let (signature, dependencies) =
-                    self.do_as_child(|child| child.evaluate_signature_context(context));
+                    self.do_as_child(|child| child.evaluate_signature_context(context, resolver));
                 let signature = signature?;
                 SignatureLambda {
                     signature: SignatureValue::Known(signature),
@@ -786,30 +807,30 @@ impl<'s> EvaluationState<'s> {
                 } = self.function_lambda(source_id);
 
                 match source_function {
-                    FunctionValue::Known(KnownFunctionValue {
-                                             given_signatures,
-                                             given_signature_ids,
-                                             ..
-                                         }) => {
-                        let foreign_id =
-                            if let Some(&id) = given_signature_ids.get(foreign.as_str()) {
-                                id
-                            } else {
-                                return Err(CheckError::CannotResolveGivenSignature {
-                                    statement: location,
-                                    source,
-                                    foreign,
-                                });
-                            };
+                    FunctionValue::Known(source_value) => {
+                        let foreign_id = if let Some(&id) =
+                            source_value.given_signature_ids.get(foreign.as_str())
+                        {
+                            id
+                        } else {
+                            return Err(CheckError::CannotResolveGivenSignature {
+                                statement: location,
+                                source,
+                                source_value,
+                                foreign,
+                            });
+                        };
 
-                        let foreign_lambda = given_signatures
+                        let foreign_lambda = source_value
+                            .given_signatures
                             .get(&foreign_id)
                             .expect("could not find given signature by id");
 
                         if !foreign_lambda.dependencies.is_empty() {
-                            return Err(CheckError::GiveSignatureDependenciesNotProvided {
+                            return Err(CheckError::TakenSignatureDependenciesNotProvided {
                                 statement: location,
                                 source,
+                                source_value,
                                 foreign,
                             });
                         }
@@ -819,10 +840,11 @@ impl<'s> EvaluationState<'s> {
                             dependencies: source_dependencies,
                         }
                     }
-                    FunctionValue::Unknown(_) => {
+                    FunctionValue::Unknown(source_value) => {
                         return Err(CheckError::CannotTakeSignatureFromUnknownFunction {
                             statement: location,
                             source,
+                            source_value,
                         });
                     }
                 }
@@ -854,6 +876,7 @@ impl<'s> EvaluationState<'s> {
                             return Err(CheckError::CannotResolveTakenSignatureOfSignature {
                                 statement: location,
                                 source,
+                                source_value,
                                 foreign,
                             });
                         };
@@ -879,10 +902,11 @@ impl<'s> EvaluationState<'s> {
                             dependencies,
                         }
                     }
-                    SignatureValue::Unknown(_) => {
+                    SignatureValue::Unknown(source_value) => {
                         return Err(CheckError::CannotGiveSignatureToUnknownSignature {
                             statement: location,
                             source,
+                            source_value,
                         });
                     }
                 }
@@ -914,6 +938,7 @@ impl<'s> EvaluationState<'s> {
                             return Err(CheckError::CannotResolveTakenFunctionOfSignature {
                                 statement: location,
                                 source,
+                                source_value,
                                 foreign,
                             });
                         };
@@ -925,8 +950,11 @@ impl<'s> EvaluationState<'s> {
                                 CheckError::FunctionGivenToSignatureDoesNotHaveExpectedSignature {
                                     statement: location,
                                     function,
+                                    function_value,
                                     foreign,
                                     source,
+                                    expected_signature_value: expected_signature.clone(),
+                                    source_value,
                                 },
                             );
                         }
@@ -952,16 +980,18 @@ impl<'s> EvaluationState<'s> {
                             dependencies,
                         }
                     }
-                    SignatureValue::Unknown(_) => {
-                        return Err(CheckError::CannotGiveSignatureToUnknownSignature {
+                    SignatureValue::Unknown(source_value) => {
+                        return Err(CheckError::CannotGiveFunctionToUnknownSignature {
                             statement: location,
                             source,
+                            source_value,
                         });
                     }
                 }
             }
         };
 
+        resolver.signatures.insert(lhs_id, lhs);
         self.signature_ids.insert(lhs.as_str(), lhs_id);
         self.signature_lambdas.insert(lhs_id, lambda);
 
@@ -971,6 +1001,7 @@ impl<'s> EvaluationState<'s> {
     fn process_function_assignment(
         &mut self,
         assignment: FunctionAssignment<'s>,
+        resolver: &mut Resolver<'s>,
         mut register_taken_function: impl FnMut(Function<'s>, FunctionId, &SignatureValue<'s>),
     ) -> CheckResult<'s, ()> {
         let FunctionAssignment { lhs, rhs, location } = assignment;
@@ -1058,7 +1089,7 @@ impl<'s> EvaluationState<'s> {
             }
             FunctionAssignmentRhs::Define(DefineFunction { context }) => {
                 let (function, dependencies) =
-                    self.do_as_child(|child| child.evaluate_function_context(context));
+                    self.do_as_child(|child| child.evaluate_function_context(context, resolver));
                 let function = function?;
                 FunctionLambda {
                     function: FunctionValue::Known(function),
@@ -1073,30 +1104,30 @@ impl<'s> EvaluationState<'s> {
                 } = self.function_lambda(source_id);
 
                 match source_function {
-                    FunctionValue::Known(KnownFunctionValue {
-                                             given_functions,
-                                             given_function_ids,
-                                             ..
-                                         }) => {
-                        let foreign_id = if let Some(&id) = given_function_ids.get(foreign.as_str())
+                    FunctionValue::Known(source_value) => {
+                        let foreign_id = if let Some(&id) =
+                            source_value.given_function_ids.get(foreign.as_str())
                         {
                             id
                         } else {
                             return Err(CheckError::CannotResolveGivenFunction {
                                 statement: location,
                                 source,
+                                source_value,
                                 foreign,
                             });
                         };
 
-                        let foreign_lambda = given_functions
+                        let foreign_lambda = source_value
+                            .given_functions
                             .get(&foreign_id)
                             .expect("could not find given function by id");
 
                         if !foreign_lambda.dependencies.is_empty() {
-                            return Err(CheckError::GiveFunctionDependenciesNotProvided {
+                            return Err(CheckError::TakenFunctionDependenciesNotProvided {
                                 statement: location,
                                 source,
+                                source_value,
                                 foreign,
                             });
                         }
@@ -1106,10 +1137,11 @@ impl<'s> EvaluationState<'s> {
                             dependencies: source_dependencies,
                         }
                     }
-                    FunctionValue::Unknown(_) => {
-                        return Err(CheckError::CannotTakeSignatureFromUnknownFunction {
+                    FunctionValue::Unknown(source_value) => {
+                        return Err(CheckError::CannotTakeFunctionFromUnknownFunction {
                             statement: location,
                             source,
+                            source_value,
                         });
                     }
                 }
@@ -1141,6 +1173,7 @@ impl<'s> EvaluationState<'s> {
                             return Err(CheckError::CannotResolveTakenSignatureOfFunction {
                                 statement: location,
                                 source,
+                                source_value,
                                 foreign,
                             });
                         };
@@ -1167,10 +1200,11 @@ impl<'s> EvaluationState<'s> {
                             dependencies,
                         }
                     }
-                    FunctionValue::Unknown(_) => {
+                    FunctionValue::Unknown(source_value) => {
                         return Err(CheckError::CannotGiveSignatureToUnknownFunction {
                             statement: location,
                             source,
+                            source_value,
                         });
                     }
                 }
@@ -1202,6 +1236,7 @@ impl<'s> EvaluationState<'s> {
                             return Err(CheckError::CannotResolveTakenFunctionOfFunction {
                                 statement: location,
                                 source,
+                                source_value,
                                 foreign,
                             });
                         };
@@ -1213,8 +1248,11 @@ impl<'s> EvaluationState<'s> {
                                 CheckError::FunctionGivenToFunctionDoesNotHaveExpectedSignature {
                                     statement: location,
                                     function,
+                                    function_value,
                                     foreign,
                                     source,
+                                    expected_signature_value: expected_signature.clone(),
+                                    source_value,
                                 },
                             );
                         }
@@ -1241,16 +1279,18 @@ impl<'s> EvaluationState<'s> {
                             dependencies,
                         }
                     }
-                    FunctionValue::Unknown(_) => {
+                    FunctionValue::Unknown(source_value) => {
                         return Err(CheckError::CannotGiveFunctionToUnknownFunction {
                             statement: location,
                             source,
+                            source_value,
                         });
                     }
                 }
             }
         };
 
+        resolver.functions.insert(lhs_id, lhs);
         self.function_ids.insert(lhs.as_str(), lhs_id);
         self.function_lambdas.insert(lhs_id, lambda);
 
@@ -1260,27 +1300,32 @@ impl<'s> EvaluationState<'s> {
     fn evaluate_signature_context(
         &mut self,
         context: SignatureContext<'s>,
+        resolver: &mut Resolver<'s>,
     ) -> CheckResult<'s, KnownSignatureValue<'s>> {
         let mut context_value = KnownSignatureValue::default();
 
         for statement in context.0 {
             match statement {
                 SignatureStatement::SignatureAssignment(assignment) => {
-                    self.process_signature_assignment(assignment, |signature, id| {
+                    self.process_signature_assignment(assignment, resolver, |signature, id| {
                         context_value
                             .taken_signature_ids
                             .insert(signature.as_str(), id);
                     })?;
                 }
                 SignatureStatement::FunctionAssignment(assignment) => {
-                    self.process_function_assignment(assignment, |function, id, signature| {
-                        context_value
-                            .taken_function_ids
-                            .insert(function.as_str(), id);
-                        context_value
-                            .taken_function_signatures
-                            .insert(id, signature.clone());
-                    })?;
+                    self.process_function_assignment(
+                        assignment,
+                        resolver,
+                        |function, id, signature| {
+                            context_value
+                                .taken_function_ids
+                                .insert(function.as_str(), id);
+                            context_value
+                                .taken_function_signatures
+                                .insert(id, signature.clone());
+                        },
+                    )?;
                 }
                 SignatureStatement::ConjureSignature(ConjureSignature {
                                                          signature,
@@ -1329,6 +1374,8 @@ impl<'s> EvaluationState<'s> {
                     context_value
                         .conjured_signature_names
                         .insert(signature_id, signature.as_str());
+
+                    resolver.signatures.insert(signature_id, signature);
                 }
                 SignatureStatement::ConjureFunction(ConjureFunction {
                                                         function,
@@ -1382,6 +1429,8 @@ impl<'s> EvaluationState<'s> {
                     context_value
                         .conjured_function_names
                         .insert(function_id, function.as_str());
+
+                    resolver.functions.insert(function_id, function);
                 }
             }
         }
@@ -1392,27 +1441,32 @@ impl<'s> EvaluationState<'s> {
     fn evaluate_function_context(
         &mut self,
         context: FunctionContext<'s>,
+        resolver: &mut Resolver<'s>,
     ) -> CheckResult<'s, KnownFunctionValue<'s>> {
         let mut context_value = KnownFunctionValue::default();
 
         for statement in context.0 {
             match statement {
                 FunctionStatement::SignatureAssignment(assignment) => {
-                    self.process_signature_assignment(assignment, |signature, id| {
+                    self.process_signature_assignment(assignment, resolver, |signature, id| {
                         context_value
                             .taken_signature_ids
                             .insert(signature.as_str(), id);
                     })?;
                 }
                 FunctionStatement::FunctionAssignment(assignment) => {
-                    self.process_function_assignment(assignment, |function, id, signature| {
-                        context_value
-                            .taken_function_ids
-                            .insert(function.as_str(), id);
-                        context_value
-                            .taken_function_signatures
-                            .insert(id, signature.clone());
-                    })?;
+                    self.process_function_assignment(
+                        assignment,
+                        resolver,
+                        |function, id, signature| {
+                            context_value
+                                .taken_function_ids
+                                .insert(function.as_str(), id);
+                            context_value
+                                .taken_function_signatures
+                                .insert(id, signature.clone());
+                        },
+                    )?;
                 }
                 FunctionStatement::GiveSignature(GiveSignature {
                                                      signature,

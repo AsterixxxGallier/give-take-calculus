@@ -1,63 +1,36 @@
-use crate::check::{
-    ConjuredFunctionValue, ConjuredSignatureValue, EvaluationState, FunctionConjuration,
-    FunctionId, FunctionLambda, FunctionValue, KnownFunctionValue, KnownSignatureValue,
-    LambdaDependencies, LambdaDependencyValues, SignatureConjuration, SignatureId, SignatureLambda,
-    SignatureValue, UnknownFunctionValue, UnknownSignatureValue,
-};
-use crate::parse::{Function, Signature};
-use std::fmt;
-use std::fmt::{Arguments, Display, Formatter, Write};
+use crate::check::*;
+use std::io;
+use std::io::Write;
 
-pub(crate) struct FormatAsDisplay<'a, 's>(&'a dyn Format<'s>, &'a dyn Resolve<'s>);
-
-impl<'a, 's> Display for FormatAsDisplay<'a, 's> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.0.format(self.1, &mut IndentingFormatter::new(f))
-    }
+pub(super) trait Format<'s> {
+    fn format(&self, resolve: &Resolver<'s>, out: &mut IndentingFormatter) -> io::Result<()>;
 }
 
-pub(crate) trait Format<'s> {
-    fn format(&self, resolve: &dyn Resolve<'s>, out: &mut IndentingFormatter) -> fmt::Result;
-}
-
-pub(crate) trait Resolve<'s> {
-    fn signature(&self, id: SignatureId) -> Signature<'s>;
-
-    fn function(&self, id: FunctionId) -> Function<'s>;
-}
-
-impl<'s> Resolve<'s> for EvaluationState<'s> {
-    fn signature(&self, id: SignatureId) -> Signature<'s> {
-        self.signature_names[&id]
-    }
-
-    fn function(&self, id: FunctionId) -> Function<'s> {
-        self.function_names[&id]
-    }
-}
-
-pub(crate) struct IndentingFormatter<'a> {
+pub(super) struct IndentingFormatter<'a> {
     indentation: usize,
     buf: &'a mut dyn Write,
 }
 
 impl<'a> IndentingFormatter<'a> {
-    pub(crate) fn new(buf: &'a mut dyn Write) -> Self {
+    pub(super) fn new(buf: &'a mut dyn Write) -> Self {
         Self {
             indentation: 0,
             buf,
         }
     }
 
-    pub(crate) fn new_line(&mut self) -> fmt::Result {
-        self.buf.write_char('\n')?;
+    pub(super) fn new_line(&mut self) -> io::Result<()> {
+        writeln!(self.buf)?;
         for _ in 0..self.indentation {
-            self.buf.write_str("  ")?;
+            write!(self.buf, "  ")?;
         }
         Ok(())
     }
 
-    pub(crate) fn indented(&mut self, f: impl FnOnce(&mut Self) -> fmt::Result) -> fmt::Result {
+    pub(super) fn indented(
+        &mut self,
+        f: impl FnOnce(&mut Self) -> io::Result<()>,
+    ) -> io::Result<()> {
         self.indentation += 1;
         let result = f(self);
         self.indentation -= 1;
@@ -66,21 +39,17 @@ impl<'a> IndentingFormatter<'a> {
 }
 
 impl<'a> Write for IndentingFormatter<'a> {
-    fn write_str(&mut self, s: &str) -> fmt::Result {
-        self.buf.write_str(s)
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.buf.write(buf)
     }
 
-    fn write_char(&mut self, c: char) -> fmt::Result {
-        self.buf.write_char(c)
-    }
-
-    fn write_fmt(&mut self, args: Arguments<'_>) -> fmt::Result {
-        self.buf.write_fmt(args)
+    fn flush(&mut self) -> io::Result<()> {
+        self.buf.flush()
     }
 }
 
 impl<'s> Format<'s> for KnownSignatureValue<'s> {
-    fn format(&self, resolve: &dyn Resolve<'s>, out: &mut IndentingFormatter) -> fmt::Result {
+    fn format(&self, resolve: &Resolver<'s>, out: &mut IndentingFormatter) -> io::Result<()> {
         write!(out, "known signature")?;
         out.indented(|out| {
             for &signature in self.taken_signature_ids.values() {
@@ -109,7 +78,7 @@ impl<'s> Format<'s> for KnownSignatureValue<'s> {
 }
 
 impl<'s> Format<'s> for KnownFunctionValue<'s> {
-    fn format(&self, resolve: &dyn Resolve<'s>, out: &mut IndentingFormatter) -> fmt::Result {
+    fn format(&self, resolve: &Resolver<'s>, out: &mut IndentingFormatter) -> io::Result<()> {
         write!(out, "known function")?;
         out.indented(|out| {
             for &signature in self.taken_signature_ids.values() {
@@ -138,7 +107,7 @@ impl<'s> Format<'s> for KnownFunctionValue<'s> {
 }
 
 impl<'s> Format<'s> for SignatureConjuration<'s> {
-    fn format(&self, resolve: &dyn Resolve<'s>, out: &mut IndentingFormatter) -> fmt::Result {
+    fn format(&self, resolve: &Resolver<'s>, out: &mut IndentingFormatter) -> io::Result<()> {
         write!(out, "Lambda ")?;
         self.dependencies.format(resolve, out)?;
         write!(out, ". conjured signature")?;
@@ -147,7 +116,7 @@ impl<'s> Format<'s> for SignatureConjuration<'s> {
 }
 
 impl<'s> Format<'s> for FunctionConjuration<'s> {
-    fn format(&self, resolve: &dyn Resolve<'s>, out: &mut IndentingFormatter) -> fmt::Result {
+    fn format(&self, resolve: &Resolver<'s>, out: &mut IndentingFormatter) -> io::Result<()> {
         write!(out, "Lambda ")?;
         self.dependencies.format(resolve, out)?;
         write!(out, ". conjured function of signature ")?;
@@ -157,7 +126,7 @@ impl<'s> Format<'s> for FunctionConjuration<'s> {
 }
 
 impl<'s> Format<'s> for SignatureLambda<'s> {
-    fn format(&self, resolve: &dyn Resolve<'s>, out: &mut IndentingFormatter) -> fmt::Result {
+    fn format(&self, resolve: &Resolver<'s>, out: &mut IndentingFormatter) -> io::Result<()> {
         write!(out, "Lambda ")?;
         self.dependencies.format(resolve, out)?;
         write!(out, ". ")?;
@@ -167,7 +136,7 @@ impl<'s> Format<'s> for SignatureLambda<'s> {
 }
 
 impl<'s> Format<'s> for FunctionLambda<'s> {
-    fn format(&self, resolve: &dyn Resolve<'s>, out: &mut IndentingFormatter) -> fmt::Result {
+    fn format(&self, resolve: &Resolver<'s>, out: &mut IndentingFormatter) -> io::Result<()> {
         write!(out, "Lambda ")?;
         self.dependencies.format(resolve, out)?;
         write!(out, ". ")?;
@@ -177,7 +146,7 @@ impl<'s> Format<'s> for FunctionLambda<'s> {
 }
 
 impl<'s> Format<'s> for LambdaDependencies<'s> {
-    fn format(&self, resolve: &dyn Resolve<'s>, out: &mut IndentingFormatter) -> fmt::Result {
+    fn format(&self, resolve: &Resolver<'s>, out: &mut IndentingFormatter) -> io::Result<()> {
         if let Some(&first) = self.signatures.first() {
             write!(out, "{}", resolve.signature(first))?;
             for &signature in self.signatures.iter().skip(1) {
@@ -197,7 +166,7 @@ impl<'s> Format<'s> for LambdaDependencies<'s> {
 }
 
 impl<'s> Format<'s> for LambdaDependencyValues<'s> {
-    fn format(&self, resolve: &dyn Resolve<'s>, out: &mut IndentingFormatter) -> fmt::Result {
+    fn format(&self, resolve: &Resolver<'s>, out: &mut IndentingFormatter) -> io::Result<()> {
         for (&signature, value) in self.signatures.iter().skip(1) {
             out.new_line()?;
             write!(out, "{} = ", resolve.signature(signature))?;
@@ -213,7 +182,7 @@ impl<'s> Format<'s> for LambdaDependencyValues<'s> {
 }
 
 impl<'s> Format<'s> for ConjuredSignatureValue<'s> {
-    fn format(&self, resolve: &dyn Resolve<'s>, out: &mut IndentingFormatter) -> fmt::Result {
+    fn format(&self, resolve: &Resolver<'s>, out: &mut IndentingFormatter) -> io::Result<()> {
         write!(
             out,
             "conjured signature {}",
@@ -232,7 +201,7 @@ impl<'s> Format<'s> for ConjuredSignatureValue<'s> {
 }
 
 impl<'s> Format<'s> for ConjuredFunctionValue<'s> {
-    fn format(&self, resolve: &dyn Resolve<'s>, out: &mut IndentingFormatter) -> fmt::Result {
+    fn format(&self, resolve: &Resolver<'s>, out: &mut IndentingFormatter) -> io::Result<()> {
         write!(
             out,
             "conjured function {}",
@@ -242,6 +211,7 @@ impl<'s> Format<'s> for ConjuredFunctionValue<'s> {
             out.new_line()?;
             write!(out, "unknown function: ")?;
             self.unknown_function.format(resolve, out)?;
+            out.new_line()?;
             write!(out, "dependency values:")?;
             out.indented(|out| self.conjure_dependency_values.format(resolve, out))?;
             Ok(())
@@ -251,7 +221,7 @@ impl<'s> Format<'s> for ConjuredFunctionValue<'s> {
 }
 
 impl<'s> Format<'s> for UnknownSignatureValue<'s> {
-    fn format(&self, resolve: &dyn Resolve<'s>, out: &mut IndentingFormatter) -> fmt::Result {
+    fn format(&self, resolve: &Resolver<'s>, out: &mut IndentingFormatter) -> io::Result<()> {
         match self {
             &UnknownSignatureValue::Taken(signature) => {
                 write!(out, "{}", resolve.signature(signature))
@@ -262,7 +232,7 @@ impl<'s> Format<'s> for UnknownSignatureValue<'s> {
 }
 
 impl<'s> Format<'s> for UnknownFunctionValue<'s> {
-    fn format(&self, resolve: &dyn Resolve<'s>, out: &mut IndentingFormatter) -> fmt::Result {
+    fn format(&self, resolve: &Resolver<'s>, out: &mut IndentingFormatter) -> io::Result<()> {
         match self {
             &UnknownFunctionValue::Taken(function, _) => {
                 write!(out, "{}", resolve.function(function))
@@ -273,7 +243,7 @@ impl<'s> Format<'s> for UnknownFunctionValue<'s> {
 }
 
 impl<'s> Format<'s> for SignatureValue<'s> {
-    fn format(&self, resolve: &dyn Resolve<'s>, out: &mut IndentingFormatter) -> fmt::Result {
+    fn format(&self, resolve: &Resolver<'s>, out: &mut IndentingFormatter) -> io::Result<()> {
         match self {
             SignatureValue::Known(known) => known.format(resolve, out),
             SignatureValue::Unknown(unknown) => unknown.format(resolve, out),
@@ -282,7 +252,7 @@ impl<'s> Format<'s> for SignatureValue<'s> {
 }
 
 impl<'s> Format<'s> for FunctionValue<'s> {
-    fn format(&self, resolve: &dyn Resolve<'s>, out: &mut IndentingFormatter) -> fmt::Result {
+    fn format(&self, resolve: &Resolver<'s>, out: &mut IndentingFormatter) -> io::Result<()> {
         match self {
             FunctionValue::Known(known) => known.format(resolve, out),
             FunctionValue::Unknown(unknown) => unknown.format(resolve, out),

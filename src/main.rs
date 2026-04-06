@@ -1,9 +1,9 @@
-// #![feature(debug_closure_helpers)]
 #![feature(pattern)]
 
 use crate::check::check_function_context;
 use crate::parse::parse_file_as_function_context;
 use crate::parse::Source;
+use std::io::stdout;
 
 mod check;
 #[allow(unused)]
@@ -18,9 +18,9 @@ fn main() {
             println!("parsing successful");
             // println!("{:#?}", context);
 
-            check_function_context(context).unwrap();
-
-            println!("checking successful");
+            if check_function_context(context, &mut stdout()) {
+                println!("checking successful");
+            }
         }
         Err(error) => {
             error
