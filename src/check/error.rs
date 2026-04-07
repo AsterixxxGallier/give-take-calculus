@@ -1,5 +1,8 @@
 use crate::check::format::{Format, IndentingFormatter};
-use crate::check::{FunctionValue, KnownFunctionValue, KnownSignatureValue, Resolver, SignatureValue, UnknownFunctionValue, UnknownSignatureValue};
+use crate::check::{
+    FunctionValue, KnownFunctionValue, KnownSignatureValue, Resolver, SignatureValue,
+    UnknownFunctionValue, UnknownSignatureValue,
+};
 use crate::parse::{ForeignFunction, ForeignSignature, Function, Signature, SourceLocation};
 use ariadne::{Color, Label, Report, ReportKind};
 use std::io;
@@ -129,6 +132,22 @@ pub(crate) enum CheckError<'s> {
         signature: Signature<'s>,
         statement: SourceLocation<'s>,
     },
+    CannotConjureTwoFunctionsWithIdenticalName {
+        function: Function<'s>,
+        statement: SourceLocation<'s>,
+    },
+    CannotTakeTwoSignaturesWithIdenticalName {
+        signature: Signature<'s>,
+        statement: SourceLocation<'s>,
+        other_signature: Signature<'s>,
+        other_statement: SourceLocation<'s>,
+    },
+    CannotTakeTwoFunctionsWithIdenticalName {
+        function: Function<'s>,
+        statement: SourceLocation<'s>,
+        other_function: Function<'s>,
+        other_statement: SourceLocation<'s>,
+    },
     RepeatedSignatureDependencyInConjure {
         statement: SourceLocation<'s>,
         signature: Signature<'s>,
@@ -136,10 +155,6 @@ pub(crate) enum CheckError<'s> {
     RepeatedFunctionDependencyInConjure {
         statement: SourceLocation<'s>,
         function: Function<'s>,
-    },
-    CannotConjureTwoFunctionsWithIdenticalName {
-        function: Function<'s>,
-        statement: SourceLocation<'s>,
     },
 }
 
@@ -237,6 +252,7 @@ impl<'s> CheckError<'s> {
             } => {
                 // TODO
                 _ = foreign;
+                _ = source_value;
                 Report::build(ReportKind::Error, statement)
                     .with_label(
                         Label::new(function.symbol)
@@ -298,6 +314,12 @@ impl<'s> CheckError<'s> {
                 out,
                 "CheckError::CannotConjureTwoFunctionsWithIdenticalName"
             ),
+            CheckError::CannotTakeTwoSignaturesWithIdenticalName { .. } => {
+                writeln!(out, "CheckError::CannotTakeTwoSignaturesWithIdenticalName")
+            }
+            CheckError::CannotTakeTwoFunctionsWithIdenticalName { .. } => {
+                writeln!(out, "CheckError::CannotTakeTwoFunctionsWithIdenticalName")
+            }
         }
     }
 }

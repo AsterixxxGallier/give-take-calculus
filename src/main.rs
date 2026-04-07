@@ -1,5 +1,4 @@
 #![feature(pattern)]
-#![feature(iterator_try_collect)]
 
 use crate::check::check_function_context;
 use crate::parse::parse_file_as_function_context;

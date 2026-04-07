@@ -3,30 +3,30 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub(crate) struct Signature<'s> {
     pub(crate) with_parens: SourceLocation<'s>,
     pub(crate) symbol: SourceLocation<'s>,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub(crate) struct Function<'s> {
     pub(crate) symbol: SourceLocation<'s>,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum ForeignSignature<'s> {
     Explicit(Signature<'s>),
     Implicit(Signature<'s>),
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum ForeignFunction<'s> {
     Explicit(Function<'s>),
     Implicit(Function<'s>),
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum ConjureDependency<'s> {
     Signature(Signature<'s>),
     Function(Function<'s>),

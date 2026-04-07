@@ -59,12 +59,12 @@ impl<'s> Format<'s> for KnownSignatureValue<'s> {
     fn format(&self, resolve: &Resolver<'s>, out: &mut IndentingFormatter) -> io::Result<()> {
         write!(out, "known signature")?;
         out.indented(|out| {
-            for &signature in self.taken_signature_ids.values() {
+            for &signature in &self.taken_signatures {
                 out.new_line()?;
 
                 write_colored!(out, Color::Blue, "taking {}", resolve.signature(signature))?;
             }
-            for (&function, signature) in &self.taken_function_signatures {
+            for (&function, signature) in &self.taken_functions {
                 out.new_line()?;
                 write_colored!(out, Color::Blue, "taking {}", resolve.function(function))?;
                 write!(out, " of signature ")?;
@@ -90,11 +90,11 @@ impl<'s> Format<'s> for KnownFunctionValue<'s> {
     fn format(&self, resolve: &Resolver<'s>, out: &mut IndentingFormatter) -> io::Result<()> {
         write!(out, "known function")?;
         out.indented(|out| {
-            for &signature in self.taken_signature_ids.values() {
+            for &signature in &self.taken_signatures {
                 out.new_line()?;
                 write_colored!(out, Color::Blue, "taking {}", resolve.signature(signature))?;
             }
-            for (&function, signature) in &self.taken_function_signatures {
+            for (&function, signature) in &self.taken_functions {
                 out.new_line()?;
                 write_colored!(out, Color::Blue, "taking {}", resolve.function(function))?;
                 write!(out, " of signature ")?;
