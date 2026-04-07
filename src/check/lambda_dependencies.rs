@@ -1,4 +1,7 @@
-use crate::check::{FunctionValue, LambdaDependencies, LambdaDependencyValues, SignatureValue, UnknownFunctionValue, UnknownSignatureValue};
+use crate::check::{
+    FunctionValue, LambdaDependencies, LambdaDependencyValues, SignatureValue,
+    UnknownFunctionValue, UnknownSignatureValue,
+};
 
 impl<'s> LambdaDependencies<'s> {
     pub(crate) fn is_empty(&self) -> bool {

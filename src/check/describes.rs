@@ -60,10 +60,15 @@ impl<'s> SignatureValue<'s> {
                             let this_conjuration = &known_this.conjured_signatures[&this_id];
 
                             for &this_dependency_id in &this_conjuration.dependencies.signatures {
-                                let dependency_name = known_this.resolver.taken_signature_name(this_dependency_id);
-                                let other_dependency_id = known_other.resolver.taken_signature_id(dependency_name);
+                                let dependency_name =
+                                    known_this.resolver.taken_signature_name(this_dependency_id);
+                                let other_dependency_id =
+                                    known_other.resolver.taken_signature_id(dependency_name);
                                 if let Some(other_dependency_id) = other_dependency_id {
-                                    let is_dependency_of_other = other_conjuration.dependencies.signatures.contains(&other_dependency_id);
+                                    let is_dependency_of_other = other_conjuration
+                                        .dependencies
+                                        .signatures
+                                        .contains(&other_dependency_id);
                                     if !is_dependency_of_other {
                                         // The dependency used by THIS is not used by OTHER in the
                                         // calculation of the produced signature.
@@ -77,11 +82,18 @@ impl<'s> SignatureValue<'s> {
                             }
 
                             // TODO explain why the signatures can be ignored
-                            for &this_dependency_id in this_conjuration.dependencies.functions.keys() {
-                                let dependency_name = known_this.resolver.taken_function_name(this_dependency_id);
-                                let other_dependency_id = known_other.resolver.taken_function_id(dependency_name);
+                            for &this_dependency_id in
+                                this_conjuration.dependencies.functions.keys()
+                            {
+                                let dependency_name =
+                                    known_this.resolver.taken_function_name(this_dependency_id);
+                                let other_dependency_id =
+                                    known_other.resolver.taken_function_id(dependency_name);
                                 if let Some(other_dependency_id) = other_dependency_id {
-                                    let is_dependency_of_other = other_conjuration.dependencies.functions.contains_key(&other_dependency_id);
+                                    let is_dependency_of_other = other_conjuration
+                                        .dependencies
+                                        .functions
+                                        .contains_key(&other_dependency_id);
                                     if !is_dependency_of_other {
                                         // The dependency used by THIS is not used by OTHER in the
                                         // calculation of the produced signature.
@@ -112,10 +124,15 @@ impl<'s> SignatureValue<'s> {
                             let this_conjuration = &known_this.conjured_functions[&this_id];
 
                             for &this_dependency_id in &this_conjuration.dependencies.signatures {
-                                let dependency_name = known_this.resolver.taken_signature_name(this_dependency_id);
-                                let other_dependency_id = known_other.resolver.taken_signature_id(dependency_name);
+                                let dependency_name =
+                                    known_this.resolver.taken_signature_name(this_dependency_id);
+                                let other_dependency_id =
+                                    known_other.resolver.taken_signature_id(dependency_name);
                                 if let Some(other_dependency_id) = other_dependency_id {
-                                    let is_dependency_of_other = other_conjuration.dependencies.signatures.contains(&other_dependency_id);
+                                    let is_dependency_of_other = other_conjuration
+                                        .dependencies
+                                        .signatures
+                                        .contains(&other_dependency_id);
                                     if !is_dependency_of_other {
                                         // The dependency used by THIS is not used by OTHER in the
                                         // calculation of the produced function.
@@ -128,11 +145,18 @@ impl<'s> SignatureValue<'s> {
                                 }
                             }
 
-                            for &this_dependency_id in this_conjuration.dependencies.functions.keys() {
-                                let dependency_name = known_this.resolver.taken_function_name(this_dependency_id);
-                                let other_dependency_id = known_other.resolver.taken_function_id(dependency_name);
+                            for &this_dependency_id in
+                                this_conjuration.dependencies.functions.keys()
+                            {
+                                let dependency_name =
+                                    known_this.resolver.taken_function_name(this_dependency_id);
+                                let other_dependency_id =
+                                    known_other.resolver.taken_function_id(dependency_name);
                                 if let Some(other_dependency_id) = other_dependency_id {
-                                    let is_dependency_of_other = other_conjuration.dependencies.functions.contains_key(&other_dependency_id);
+                                    let is_dependency_of_other = other_conjuration
+                                        .dependencies
+                                        .functions
+                                        .contains_key(&other_dependency_id);
                                     if !is_dependency_of_other {
                                         // The dependency used by THIS is not used by OTHER in the
                                         // calculation of the produced function.

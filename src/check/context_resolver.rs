@@ -103,8 +103,7 @@ impl<'s> ContextResolver<'s> {
 
     pub(super) fn remove_taken_function(&mut self, id: FunctionId) {
         let definition = self.taken_function_definitions.remove(&id).unwrap();
-        self.taken_function_ids
-            .remove(definition.function.as_str());
+        self.taken_function_ids.remove(definition.function.as_str());
     }
 
     pub(super) fn taken_signature_id(&self, name: &'s str) -> Option<SignatureId> {

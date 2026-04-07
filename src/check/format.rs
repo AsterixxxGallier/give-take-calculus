@@ -72,12 +72,22 @@ impl<'s> Format<'s> for KnownSignatureValue<'s> {
             }
             for (&signature, conjuration) in &self.conjured_signatures {
                 out.new_line()?;
-                write_colored!(out, Color::Blue, "conjuring {}: ", resolve.signature(signature))?;
+                write_colored!(
+                    out,
+                    Color::Blue,
+                    "conjuring {}: ",
+                    resolve.signature(signature)
+                )?;
                 conjuration.format(resolve, out)?;
             }
             for (&function, conjuration) in &self.conjured_functions {
                 out.new_line()?;
-                write_colored!(out, Color::Blue, "conjuring {}: ", resolve.function(function))?;
+                write_colored!(
+                    out,
+                    Color::Blue,
+                    "conjuring {}: ",
+                    resolve.function(function)
+                )?;
                 conjuration.format(resolve, out)?;
             }
             Ok(())
@@ -102,7 +112,12 @@ impl<'s> Format<'s> for KnownFunctionValue<'s> {
             }
             for (&signature, lambda) in &self.given_signatures {
                 out.new_line()?;
-                write_colored!(out, Color::Blue, "giving {}: ", resolve.signature(signature))?;
+                write_colored!(
+                    out,
+                    Color::Blue,
+                    "giving {}: ",
+                    resolve.signature(signature)
+                )?;
                 lambda.format(resolve, out)?;
             }
             for (&function, lambda) in &self.given_functions {

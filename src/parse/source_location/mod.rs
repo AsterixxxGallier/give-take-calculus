@@ -195,7 +195,7 @@ impl<'s> SourceLocation<'s> {
 
     pub(super) fn trim_matches<P: Pattern>(mut self, pattern: P) -> Self
     where
-            for<'a> P::Searcher<'a>: DoubleEndedSearcher<'a>,
+        for<'a> P::Searcher<'a>: DoubleEndedSearcher<'a>,
     {
         let mut searcher = pattern.into_searcher(self.as_str());
 

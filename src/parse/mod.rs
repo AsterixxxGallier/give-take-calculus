@@ -729,33 +729,37 @@ fn parse_signature_statement_or_trace(
 }
 
 fn parse_function_context(location: SourceLocationLines<'_>) -> LinesParseResult![FunctionContext] {
-    let (location, statements) = parse_with_indentation(location, parse_function_statement_or_trace)?;
+    let (location, statements) =
+        parse_with_indentation(location, parse_function_statement_or_trace)?;
     let mut trace = false;
-    let statements = statements.into_iter().filter_map(|statement_or_trace| {
-        match statement_or_trace {
+    let statements = statements
+        .into_iter()
+        .filter_map(|statement_or_trace| match statement_or_trace {
             StatementOrTrace::Statement(statement) => Some(statement),
             StatementOrTrace::Trace => {
                 trace = true;
                 None
             }
-        }
-    }).collect();
+        })
+        .collect();
     Ok((location, FunctionContext { trace, statements }))
 }
 
 fn parse_signature_context(
     location: SourceLocationLines<'_>,
 ) -> LinesParseResult![SignatureContext] {
-    let (location, statements) = parse_with_indentation(location, parse_signature_statement_or_trace)?;
+    let (location, statements) =
+        parse_with_indentation(location, parse_signature_statement_or_trace)?;
     let mut trace = false;
-    let statements = statements.into_iter().filter_map(|statement_or_trace| {
-        match statement_or_trace {
+    let statements = statements
+        .into_iter()
+        .filter_map(|statement_or_trace| match statement_or_trace {
             StatementOrTrace::Statement(statement) => Some(statement),
             StatementOrTrace::Trace => {
                 trace = true;
                 None
             }
-        }
-    }).collect();
+        })
+        .collect();
     Ok((location, SignatureContext { trace, statements }))
 }

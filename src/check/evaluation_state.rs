@@ -1,5 +1,8 @@
 use crate::check::error::CheckResult;
-use crate::check::{CheckError, EvaluationState, FunctionId, FunctionLambda, LambdaDependencies, SignatureId, SignatureLambda};
+use crate::check::{
+    CheckError, EvaluationState, FunctionId, FunctionLambda, LambdaDependencies, SignatureId,
+    SignatureLambda,
+};
 use crate::parse::{Function, Signature};
 use std::mem;
 
@@ -21,7 +24,10 @@ impl<'s> EvaluationState<'s> {
         (result, dependencies)
     }
 
-    pub(super) fn resolve_signature(&self, signature: Signature<'s>) -> CheckResult<'s, SignatureId> {
+    pub(super) fn resolve_signature(
+        &self,
+        signature: Signature<'s>,
+    ) -> CheckResult<'s, SignatureId> {
         let mut this = Some(self);
         while let Some(current) = this {
             if let Some(&id) = current.signature_ids.get(signature.as_str()) {

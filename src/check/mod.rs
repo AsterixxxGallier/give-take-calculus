@@ -3,7 +3,7 @@ use crate::check::format::{Format, IndentingFormatter};
 use crate::parse::*;
 use ordermap::{OrderMap, OrderSet};
 use std::collections::HashMap;
-use std::io::{stdout, Write};
+use std::io::{Write, stdout};
 
 mod context_resolver;
 mod describes;
@@ -252,10 +252,10 @@ impl<'s> EvaluationState<'s> {
                 }
             }
             SignatureAssignmentRhs::GiveSignatureToSignature(GiveSignatureToSignature {
-                                                                 signature,
-                                                                 foreign,
-                                                                 source,
-                                                             }) => {
+                signature,
+                foreign,
+                source,
+            }) => {
                 let signature_id = self.resolve_signature(signature)?;
                 let SignatureLambda {
                     signature: signature_value,
@@ -327,10 +327,10 @@ impl<'s> EvaluationState<'s> {
                 }
             }
             SignatureAssignmentRhs::GiveFunctionToSignature(GiveFunctionToSignature {
-                                                                function,
-                                                                foreign,
-                                                                source,
-                                                            }) => {
+                function,
+                foreign,
+                source,
+            }) => {
                 let function_id = self.resolve_function(function)?;
                 let FunctionLambda {
                     function: function_value,
@@ -585,10 +585,10 @@ impl<'s> EvaluationState<'s> {
                 }
             }
             FunctionAssignmentRhs::GiveSignatureToFunction(GiveSignatureToFunction {
-                                                               signature,
-                                                               foreign,
-                                                               source,
-                                                           }) => {
+                signature,
+                foreign,
+                source,
+            }) => {
                 let signature_id = self.resolve_signature(signature)?;
                 let SignatureLambda {
                     signature: signature_value,
@@ -663,10 +663,10 @@ impl<'s> EvaluationState<'s> {
                 }
             }
             FunctionAssignmentRhs::GiveFunctionToFunction(GiveFunctionToFunction {
-                                                              function,
-                                                              foreign,
-                                                              source,
-                                                          }) => {
+                function,
+                foreign,
+                source,
+            }) => {
                 let function_id = self.resolve_function(function)?;
                 let FunctionLambda {
                     function: function_value,
@@ -832,10 +832,10 @@ impl<'s> EvaluationState<'s> {
                     )?;
                 }
                 SignatureStatement::ConjureSignature(ConjureSignature {
-                                                         signature,
-                                                         dependencies,
-                                                         location,
-                                                     }) => {
+                    signature,
+                    dependencies,
+                    location,
+                }) => {
                     let signature_id = SignatureId::generate();
 
                     if let Some(_other_signature_id) = context_value
@@ -882,11 +882,11 @@ impl<'s> EvaluationState<'s> {
                     resolver.insert_signature(signature_id, signature, location);
                 }
                 SignatureStatement::ConjureFunction(ConjureFunction {
-                                                        function,
-                                                        signature,
-                                                        dependencies,
-                                                        location,
-                                                    }) => {
+                    function,
+                    signature,
+                    dependencies,
+                    location,
+                }) => {
                     let function_id = FunctionId::generate();
 
                     if let Some(_other_function_id) = context_value
@@ -982,9 +982,9 @@ impl<'s> EvaluationState<'s> {
                     )?;
                 }
                 FunctionStatement::GiveSignature(GiveSignature {
-                                                     signature,
-                                                     location,
-                                                 }) => {
+                    signature,
+                    location,
+                }) => {
                     let signature_id = self.resolve_signature(signature)?;
                     let lambda = self.signature_lambda(signature_id);
 
