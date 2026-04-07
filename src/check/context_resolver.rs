@@ -1,4 +1,5 @@
-use crate::check::{CheckError, CheckResult, FunctionDefinition, FunctionId, SignatureDefinition, SignatureId};
+use crate::check::error::CheckResult;
+use crate::check::{CheckError, FunctionDefinition, FunctionId, SignatureDefinition, SignatureId};
 use crate::parse::{Function, Signature, SourceLocation};
 use ordermap::OrderMap;
 
@@ -79,7 +80,7 @@ impl<'s> ContextResolver<'s> {
         };
         self.produced_signature_definitions.insert(id, definition);
     }
-    
+
     pub(super) fn insert_produced_function(
         &mut self,
         id: FunctionId,

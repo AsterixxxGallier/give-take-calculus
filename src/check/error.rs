@@ -323,3 +323,5 @@ impl<'s> CheckError<'s> {
         }
     }
 }
+
+pub(super) type CheckResult<'s, T> = Result<T, CheckError<'s>>;
