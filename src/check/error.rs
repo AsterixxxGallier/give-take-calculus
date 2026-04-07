@@ -258,14 +258,17 @@ impl<'s> CheckError<'s> {
                         &mut out,
                     )?;
                 let mut formatter = IndentingFormatter::new(&mut out);
-                write!(formatter, "value of source function: ")?;
-                source_value.format(resolve, &mut formatter)?;
-                formatter.new_line()?;
-                write!(formatter, "value of given function: ")?;
-                function_value.format(resolve, &mut formatter)?;
-                formatter.new_line()?;
-                write!(formatter, "value of expected signature: ")?;
+                // write!(formatter, "value of source function: ")?;
+                // source_value.format(resolve, &mut formatter)?;
+                // formatter.new_line()?;
+                // write!(formatter, "value of given function: ")?;
+                // function_value.format(resolve, &mut formatter)?;
+                // formatter.new_line()?;
+                write!(formatter, "expected signature: ")?;
                 expected_signature_value.format(resolve, &mut formatter)?;
+                formatter.new_line()?;
+                write!(formatter, "actual signature: ")?;
+                function_value.signature().format(resolve, &mut formatter)?;
                 formatter.new_line()?;
                 Ok(())
             }

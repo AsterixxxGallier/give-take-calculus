@@ -185,8 +185,9 @@ impl<'s> LambdaDependencies<'s> {
 }
 
 impl<'s> SignatureValue<'s> {
-    pub(crate) fn describes(&self, function: &FunctionValue<'s>) -> bool {
-        match self {
+    fn describes(&self, function: &FunctionValue<'s>, resolver: &Resolver<'s>) -> bool {
+        self.describes_all(&function.signature(), resolver)
+        /*match self {
             SignatureValue::Known(known_signature) => match function {
                 FunctionValue::Known(known_function) => {
                     for (&conjured_id, conjuration) in &known_signature.conjured_signatures {
@@ -262,6 +263,170 @@ impl<'s> SignatureValue<'s> {
                         UnknownFunctionValue::Conjured(_) => false,
                     },
                 },
+            },
+        }*/
+    }
+
+    fn describes_all(
+        &self,
+        other: &SignatureValue<'s>,
+        resolver: &Resolver<'s>,
+    ) -> bool {
+        match self {
+            SignatureValue::Known(known_this) => match other {
+                SignatureValue::Known(known_other) => {
+                    for (&this_id, this_conjuration) in &known_this.conjured_signatures {
+                        let name = known_this.conjured_signature_names[&this_id];
+                        let Some(&other_id) = known_other.conjured_signature_ids.get(name) else {
+                            return false;
+                        };
+                        let other_conjuration = &known_other.conjured_signatures[&other_id];
+                        let other_conjuration_signature_dependencies = other_conjuration
+                            .dependencies
+                            .signatures
+                            .iter()
+                            .map(|&id| {
+                                known_this
+                                    .taken_signature_ids
+                                    .get(resolver.signature(id).as_str())
+                                    .copied()
+                            })
+                            .try_collect::<OrderSet<_>>();
+                        let subset = other_conjuration_signature_dependencies.is_some_and(|it| {
+                            it.is_subset(&this_conjuration.dependencies.signatures)
+                        }) && other_conjuration.dependencies.functions.iter().all(
+                            |(&function_id, signature)| {
+                                let Some(function_id) = known_this
+                                    .taken_function_ids
+                                    .get(resolver.function(function_id).as_str())
+                                    .copied() else {
+                                    return false;
+                                };
+                                if let Some(other_signature) =
+                                    (&this_conjuration.dependencies).functions.get(&function_id)
+                                {
+                                    // TODO or the other way around?
+                                    other_signature.describes_all(signature, resolver)
+                                } else {
+                                    false
+                                }
+                            },
+                        );
+                        if !subset {
+                            return false;
+                        }
+                    }
+
+                    for (&this_id, this_conjuration) in &known_this.conjured_functions {
+                        let name = known_this.conjured_function_names[&this_id];
+                        let Some(&other_id) = known_other.conjured_function_ids.get(name) else {
+                            return false;
+                        };
+                        let other_conjuration = &known_other.conjured_functions[&other_id];
+                        let other_conjuration_signature_dependencies = other_conjuration
+                            .dependencies
+                            .signatures
+                            .iter()
+                            .map(|&id| {
+                                known_this
+                                    .taken_signature_ids
+                                    .get(resolver.signature(id).as_str())
+                                    .copied()
+                            })
+                            .try_collect::<OrderSet<_>>();
+                        let subset = other_conjuration_signature_dependencies.is_some_and(|it| {
+                            it.is_subset(&this_conjuration.dependencies.signatures)
+                        }) && other_conjuration.dependencies.functions.iter().all(
+                            |(&function_id, signature)| {
+                                let Some(function_id) = known_this
+                                    .taken_function_ids
+                                    .get(resolver.function(function_id).as_str())
+                                    .copied() else {
+                                    return false;
+                                };
+                                if let Some(other_signature) =
+                                    (&this_conjuration.dependencies).functions.get(&function_id)
+                                {
+                                    // TODO or the other way around?
+                                    other_signature.describes_all(signature, resolver)
+                                } else {
+                                    false
+                                }
+                            },
+                        );
+                        if !subset {
+                            return false;
+                        }
+                    }
+
+                    true
+                }
+                SignatureValue::Unknown(_) => false,
+            },
+            SignatureValue::Unknown(this_unknown) => match this_unknown {
+                &UnknownSignatureValue::Taken(this_id) => match other {
+                    SignatureValue::Known(_) => false,
+                    SignatureValue::Unknown(other_unknown) => match other_unknown {
+                        &UnknownSignatureValue::Taken(other_id) => this_id == other_id,
+                        UnknownSignatureValue::Conjured(_) => false,
+                    },
+                },
+                UnknownSignatureValue::Conjured(this_conjured) => match other {
+                    SignatureValue::Known(_) => false,
+                    SignatureValue::Unknown(other_unknown) => match other_unknown {
+                        UnknownSignatureValue::Taken(_) => false,
+                        UnknownSignatureValue::Conjured(other_conjured) => {
+                            this_conjured == other_conjured
+                        }
+                    },
+                },
+            },
+        }
+    }
+}
+
+impl<'s> FunctionValue<'s> {
+    pub(crate) fn signature(&self) -> SignatureValue<'s> {
+        match self {
+            FunctionValue::Known(known) => SignatureValue::Known(KnownSignatureValue {
+                conjured_signatures: known
+                    .given_signatures
+                    .iter()
+                    .map(|(&id, lambda)| {
+                        (
+                            id,
+                            SignatureConjuration {
+                                dependencies: lambda.dependencies.clone(),
+                            },
+                        )
+                    })
+                    .collect(),
+                conjured_functions: known
+                    .given_functions
+                    .iter()
+                    .map(|(&id, lambda)| {
+                        (
+                            id,
+                            FunctionConjuration {
+                                signature: lambda.function.signature(),
+                                dependencies: lambda.dependencies.clone(),
+                            },
+                        )
+                    })
+                    .collect(),
+                conjured_signature_ids: known.given_signature_ids.clone(),
+                conjured_function_ids: known.given_function_ids.clone(),
+                conjured_signature_names: known.given_signature_names.clone(),
+                conjured_function_names: known.given_function_names.clone(),
+                taken_signature_ids: known.taken_signature_ids.clone(),
+                taken_function_ids: known.taken_function_ids.clone(),
+                taken_function_signatures: known.taken_function_signatures.clone(),
+            }),
+            FunctionValue::Unknown(unknown) => match unknown {
+                UnknownFunctionValue::Taken(_, signature) => signature.clone(),
+                UnknownFunctionValue::Conjured(conjured) => {
+                    conjured.conjured_function_signature.clone()
+                }
             },
         }
     }
@@ -962,7 +1127,7 @@ impl<'s> EvaluationState<'s> {
 
                         let expected_signature =
                             &source_value.taken_function_signatures[&foreign_id];
-                        if !expected_signature.describes(&function_value) {
+                        if !expected_signature.describes(&function_value, resolver) {
                             return Err(
                                 CheckError::FunctionGivenToSignatureDoesNotHaveExpectedSignature {
                                     statement: location,
@@ -1284,7 +1449,7 @@ impl<'s> EvaluationState<'s> {
 
                         let expected_signature =
                             &source_value.taken_function_signatures[&foreign_id];
-                        if !expected_signature.describes(&function_value) {
+                        if !expected_signature.describes(&function_value, resolver) {
                             return Err(
                                 CheckError::FunctionGivenToFunctionDoesNotHaveExpectedSignature {
                                     statement: location,

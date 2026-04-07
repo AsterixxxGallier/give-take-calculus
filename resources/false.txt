@@ -70,48 +70,48 @@ contraposition = define
 contraposition_reverse = define
   TRACE
 
-  (p) = take
-  (q) = take
+  (P) = take
+  (Q) = take
 
-  (not_p) = give (p) to (not)
-  (not_q) = give (q) as (p) to (not)
+  (not_P) = give (P) as (p) to (not)
+  (not_Q) = give (Q) as (p) to (not)
 
-  (contra_) = give (not_q) as (p) to (implies)
-  (contra) = give (not_p) as (q) to (contra_)
+  (contra_) = give (not_Q) as (p) to (implies)
+  (contra) = give (not_P) as (q) to (contra_)
 
-  (not_not_q) = give (not_q) as (p) to (not)
+  (not_not_Q) = give (not_Q) as (p) to (not)
 
   contra = take (contra)
-  p = take (p)
+  P = take (P)
 
-  not_q_not_p = define
-    not_q = take (not_q)
-    contra = give not_q as p to contra
-    not_p = take q from contra
-    give not_p
+  not_Q_not_P = define
+    not_Q = take (not_Q)
+    contra = give not_Q as p to contra
+    not_P = take q from contra
+    give not_P
 
-  not_not_p = define
-    not_p = take (not_p)
-    not_p = give p to not_p
-    false = take from not_p
+  not_not_P = define
+    not_P = take (not_P)
+    not_P = give P as p to not_P
+    false = take from not_P
     give false
 
-  not_not_p_renamed = define
-    p = take (not_p)
-    not_not_p = give p as not_p to not_not_p
-    false = take from not_not_p
+  not_not_P_renamed = define
+    p = take (not_P)
+    not_not_P = give p as not_P to not_not_P
+    false = take from not_not_P
     give false
 
-  contraposition = give (not_q) as (p) to contraposition
-  contraposition = give (not_p) as (q) to contraposition
+  contraposition = give (not_Q) as (p) to contraposition
+  contraposition = give (not_P) as (q) to contraposition
 
-  contraposition = give not_not_p_renamed as not_q to contraposition
-  contraposition = give not_q_not_p as p_q to contraposition
+  contraposition = give not_not_P_renamed as not_q to contraposition
+  contraposition = give not_Q_not_P as p_q to contraposition
 
-  not_not_q = take q from contraposition
+  not_not_Q = take q from contraposition
 
-  not_not = give (q) as (p) to not_not
-  not_not = give not_not_q as not_not_p to not_not
-  q = take p from not_not
+  not_not = give (Q) as (q) to not_not
+  not_not = give not_not_Q as not_not_p to not_not
+  Q = take p from not_not
 
-  give q
+  give Q

@@ -184,13 +184,15 @@ pub(crate) struct FunctionContext<'s> {
 
 impl<'s> Display for Signature<'s> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(self.with_parens.as_str())
+        // f.write_str(self.with_parens.as_str())?;
+        write!(f, " {:?}", self.with_parens)
     }
 }
 
 impl<'s> Display for Function<'s> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(self.symbol.as_str())
+        // f.write_str(self.symbol.as_str())?;
+        write!(f, "{:?}", self.symbol)
     }
 }
 
