@@ -1,3 +1,4 @@
+TRACE
 (implies) = define
   (p) = take
   (q) = take
@@ -24,12 +25,13 @@
   conjure (false) false using p
 
 not_apply = define
-  (p) = take
-  (not_p) = give (p) to (not)
-  not_p = take (not_p)
-  p = take (p)
-  not_p_but_p = give p to not_p
-  false = take from not_p_but_p
+  TRACE
+  (P) = take
+  (not_P) = give (P) as (p) to (not)
+  not_P = take (not_P)
+  P = take (P)
+  not_P_but_P = give P as p to not_P
+  false = take from not_P_but_P
   give false
 
 (not_not) = define
@@ -66,6 +68,8 @@ contraposition = define
   give not_p
 
 contraposition_reverse = define
+  TRACE
+
   (p) = take
   (q) = take
 
@@ -92,11 +96,17 @@ contraposition_reverse = define
     false = take from not_p
     give false
 
+  not_not_p_renamed = define
+    p = take (not_p)
+    not_not_p = give p as not_p to not_not_p
+    false = take from not_not_p
+    give false
+
   contraposition = give (not_q) as (p) to contraposition
   contraposition = give (not_p) as (q) to contraposition
 
+  contraposition = give not_not_p_renamed as not_q to contraposition
   contraposition = give not_q_not_p as p_q to contraposition
-  contraposition = give not_not_p as not_q to contraposition
 
   not_not_q = take q from contraposition
 

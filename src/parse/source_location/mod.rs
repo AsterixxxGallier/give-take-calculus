@@ -32,11 +32,10 @@ impl<'s> Debug for SourceLocation<'s> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "[{}:{} {}-{}] {:?}",
+            "[{}:{}:{}] {:?}",
             self.file.file_name,
             self.line + 1,
-            self.start_column,
-            self.end_column,
+            self.start_column + 1,
             self.as_str()
         )
     }

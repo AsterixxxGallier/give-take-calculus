@@ -656,27 +656,106 @@ fn parse_function_statement(
 fn parse_indented_function_context(
     location: SourceLocationLines<'_>,
 ) -> LinesParseResult![FunctionContext] {
-    parse_indented(location, parse_function_context, || {
-        FunctionContext(Vec::new())
+    parse_indented(location, parse_function_context, || FunctionContext {
+        trace: false,
+        statements: Vec::new(),
     })
 }
 
 fn parse_indented_signature_context(
     location: SourceLocationLines<'_>,
 ) -> LinesParseResult![SignatureContext] {
-    parse_indented(location, parse_signature_context, || {
-        SignatureContext(Vec::new())
+    parse_indented(location, parse_signature_context, || SignatureContext {
+        trace: false,
+        statements: Vec::new(),
     })
 }
 
+enum StatementOrTrace<T> {
+    Statement(T),
+    Trace,
+}
+
+fn parse_function_statement_or_trace(
+    location: SourceLocationLines<'_>,
+) -> Result<
+    (
+        SourceLocationLines<'_>,
+        StatementOrTrace<FunctionStatement<'_>>,
+    ),
+    ParseError<'_>,
+> {
+    if location
+        .first()
+        .expect("should not be empty")
+        .trim()
+        .as_str()
+        == "TRACE"
+    {
+        Ok((
+            location.advance().expect("should not be empty"),
+            StatementOrTrace::Trace,
+        ))
+    } else {
+        let (location, statement) = parse_function_statement(location)?;
+        Ok((location, StatementOrTrace::Statement(statement)))
+    }
+}
+
+fn parse_signature_statement_or_trace(
+    location: SourceLocationLines<'_>,
+) -> Result<
+    (
+        SourceLocationLines<'_>,
+        StatementOrTrace<SignatureStatement<'_>>,
+    ),
+    ParseError<'_>,
+> {
+    if location
+        .first()
+        .expect("should not be empty")
+        .trim()
+        .as_str()
+        == "TRACE"
+    {
+        Ok((
+            location.advance().expect("should not be empty"),
+            StatementOrTrace::Trace,
+        ))
+    } else {
+        let (location, statement) = parse_signature_statement(location)?;
+        Ok((location, StatementOrTrace::Statement(statement)))
+    }
+}
+
 fn parse_function_context(location: SourceLocationLines<'_>) -> LinesParseResult![FunctionContext] {
-    let (location, statements) = parse_with_indentation(location, parse_function_statement)?;
-    Ok((location, FunctionContext(statements)))
+    let (location, statements) = parse_with_indentation(location, parse_function_statement_or_trace)?;
+    let mut trace = false;
+    let statements = statements.into_iter().filter_map(|statement_or_trace| {
+        match statement_or_trace {
+            StatementOrTrace::Statement(statement) => Some(statement),
+            StatementOrTrace::Trace => {
+                trace = true;
+                None
+            }
+        }
+    }).collect();
+    Ok((location, FunctionContext { trace, statements }))
 }
 
 fn parse_signature_context(
     location: SourceLocationLines<'_>,
 ) -> LinesParseResult![SignatureContext] {
-    let (location, statements) = parse_with_indentation(location, parse_signature_statement)?;
-    Ok((location, SignatureContext(statements)))
+    let (location, statements) = parse_with_indentation(location, parse_signature_statement_or_trace)?;
+    let mut trace = false;
+    let statements = statements.into_iter().filter_map(|statement_or_trace| {
+        match statement_or_trace {
+            StatementOrTrace::Statement(statement) => Some(statement),
+            StatementOrTrace::Trace => {
+                trace = true;
+                None
+            }
+        }
+    }).collect();
+    Ok((location, SignatureContext { trace, statements }))
 }

@@ -1,13 +1,14 @@
 use crate::parse::*;
 use ordermap::{OrderMap, OrderSet};
 use std::collections::HashMap;
-use std::io::Write;
+use std::io::{stdout, Write};
 use std::mem;
 
 mod error;
 pub(crate) mod format;
 mod id;
 
+use crate::check::format::{Format, IndentingFormatter};
 pub(crate) use error::*;
 
 macro_rules! id {
@@ -227,16 +228,23 @@ impl<'s> SignatureValue<'s> {
             SignatureValue::Unknown(unknown) => match *unknown {
                 UnknownSignatureValue::Taken(signature_id) => match function {
                     FunctionValue::Known(_) => false,
-                    FunctionValue::Unknown(unknown) => match *unknown {
-                        UnknownFunctionValue::Taken(function, ref signature) => {
+                    FunctionValue::Unknown(unknown) => match unknown {
+                        &UnknownFunctionValue::Taken(function, ref signature) => {
                             _ = function;
+
                             matches!(
                                 signature,
                                 &SignatureValue::Unknown(UnknownSignatureValue::Taken(other_id))
                                 if other_id == signature_id
                             )
                         }
-                        UnknownFunctionValue::Conjured(_) => false,
+                        UnknownFunctionValue::Conjured(conjured) => {
+                            matches!(
+                                conjured.conjured_function_signature,
+                                SignatureValue::Unknown(UnknownSignatureValue::Taken(other_id))
+                                if other_id == signature_id
+                            )
+                        }
                     },
                 },
                 UnknownSignatureValue::Conjured(ref conjured) => match function {
@@ -250,6 +258,7 @@ impl<'s> SignatureValue<'s> {
                                 if conjured == other_conjured
                             )
                         }
+                        // TODO: This is probably wrong.
                         UnknownFunctionValue::Conjured(_) => false,
                     },
                 },
@@ -264,12 +273,20 @@ impl<'s> KnownSignatureValue<'s> {
         id: SignatureId,
         value: &SignatureValue<'s>,
     ) {
+        for signature in self.taken_function_signatures.values_mut() {
+            signature.substitute_taken_signature(id, value);
+        }
+
         for conjuration in self.conjured_functions.values_mut() {
             conjuration.signature.substitute_taken_signature(id, value);
         }
     }
 
     pub(crate) fn substitute_taken_function(&mut self, id: FunctionId, value: &FunctionValue<'s>) {
+        for signature in self.taken_function_signatures.values_mut() {
+            signature.substitute_taken_function(id, value);
+        }
+
         for conjuration in self.conjured_functions.values_mut() {
             conjuration.signature.substitute_taken_function(id, value);
         }
@@ -282,6 +299,10 @@ impl<'s> KnownFunctionValue<'s> {
         id: SignatureId,
         value: &SignatureValue<'s>,
     ) {
+        for signature in self.taken_function_signatures.values_mut() {
+            signature.substitute_taken_signature(id, value);
+        }
+
         for conjuration in self.given_signatures.values_mut() {
             conjuration.signature.substitute_taken_signature(id, value);
         }
@@ -292,6 +313,10 @@ impl<'s> KnownFunctionValue<'s> {
     }
 
     pub(crate) fn substitute_taken_function(&mut self, id: FunctionId, value: &FunctionValue<'s>) {
+        for signature in self.taken_function_signatures.values_mut() {
+            signature.substitute_taken_function(id, value);
+        }
+
         for conjuration in self.given_signatures.values_mut() {
             conjuration.signature.substitute_taken_function(id, value);
         }
@@ -327,25 +352,6 @@ impl<'s> LambdaDependencyValues<'s> {
         }
     }
 }
-
-/*
-#[derive(Clone, Eq, PartialEq)]
-struct ConjuredSignatureValue<'s> {
-    unknown_function: UnknownFunctionValue<'s>,
-    unknown_function_signature: KnownSignatureValue<'s>,
-    conjured_signature: SignatureId,
-    conjure_dependency_values: LambdaDependencyValues<'s>,
-}
-
-#[derive(Clone, Eq, PartialEq)]
-struct ConjuredFunctionValue<'s> {
-    unknown_function: UnknownFunctionValue<'s>,
-    unknown_function_signature: KnownSignatureValue<'s>,
-    conjured_function: FunctionId,
-    conjured_function_signature: SignatureValue<'s>,
-    conjure_dependency_values: LambdaDependencyValues<'s>,
-}
- */
 
 impl<'s> ConjuredSignatureValue<'s> {
     pub(crate) fn substitute_taken_signature(
@@ -734,16 +740,18 @@ impl<'s> EvaluationState<'s> {
             return lambda.clone();
         }
 
-        let mut this = self.parent.as_mut();
+        let mut this = Some(self);
         while let Some(current) = this {
-            if let Some(lambda) = current.signature_lambdas.get(&signature) {
-                current.dependencies.add(&lambda.dependencies);
-                return SignatureLambda {
-                    signature: lambda.signature.clone(),
-                    dependencies: Default::default(),
-                };
+            if let Some(parent) = current.parent.as_deref_mut() {
+                if let Some(lambda) = parent.signature_lambdas.get(&signature) {
+                    current.dependencies.add(&lambda.dependencies);
+                    return SignatureLambda {
+                        signature: lambda.signature.clone(),
+                        dependencies: Default::default(),
+                    };
+                }
             }
-            this = current.parent.as_mut();
+            this = current.parent.as_deref_mut();
         }
 
         panic!("could not get lambda for signature");
@@ -754,16 +762,18 @@ impl<'s> EvaluationState<'s> {
             return lambda.clone();
         }
 
-        let mut this = self.parent.as_mut();
+        let mut this = Some(self);
         while let Some(current) = this {
-            if let Some(lambda) = current.function_lambdas.get(&function) {
-                current.dependencies.add(&lambda.dependencies);
-                return FunctionLambda {
-                    function: lambda.function.clone(),
-                    dependencies: Default::default(),
-                };
+            if let Some(parent) = current.parent.as_deref_mut() {
+                if let Some(lambda) = parent.function_lambdas.get(&function) {
+                    current.dependencies.add(&lambda.dependencies);
+                    return FunctionLambda {
+                        function: lambda.function.clone(),
+                        dependencies: Default::default(),
+                    };
+                }
             }
-            this = current.parent.as_mut();
+            this = current.parent.as_deref_mut();
         }
 
         panic!("could not get lambda for function");
@@ -771,6 +781,7 @@ impl<'s> EvaluationState<'s> {
 
     fn process_signature_assignment(
         &mut self,
+        trace: bool,
         assignment: SignatureAssignment<'s>,
         resolver: &mut Resolver<'s>,
         mut register_taken_signature: impl FnMut(Signature<'s>, SignatureId),
@@ -881,6 +892,12 @@ impl<'s> EvaluationState<'s> {
                             });
                         };
 
+                        source_value.taken_signature_ids.remove(foreign.as_str());
+
+                        for value in source_value.taken_function_signatures.values_mut() {
+                            value.substitute_taken_signature(foreign_id, &signature);
+                        }
+
                         for conjuration in source_value.conjured_signatures.values_mut() {
                             // foreign won't be a dependency of _all_ conjurations,
                             // so it's okay if it's not in the set here
@@ -959,6 +976,13 @@ impl<'s> EvaluationState<'s> {
                             );
                         }
 
+                        source_value.taken_function_ids.remove(foreign.as_str());
+                        source_value.taken_function_signatures.remove(&foreign_id);
+
+                        for value in source_value.taken_function_signatures.values_mut() {
+                            value.substitute_taken_function(foreign_id, &function_value);
+                        }
+
                         for conjuration in source_value.conjured_signatures.values_mut() {
                             // foreign won't be a dependency of _all_ conjurations,
                             // so it's okay if it's not in the set here
@@ -992,6 +1016,16 @@ impl<'s> EvaluationState<'s> {
         };
 
         resolver.signatures.insert(lhs_id, lhs);
+
+        if trace {
+            print!("{:?} := ", lhs.with_parens);
+            lambda
+                .format(resolver, &mut IndentingFormatter::new(&mut stdout()))
+                .unwrap();
+            println!();
+            println!();
+        }
+
         self.signature_ids.insert(lhs.as_str(), lhs_id);
         self.signature_lambdas.insert(lhs_id, lambda);
 
@@ -1000,6 +1034,7 @@ impl<'s> EvaluationState<'s> {
 
     fn process_function_assignment(
         &mut self,
+        trace: bool,
         assignment: FunctionAssignment<'s>,
         resolver: &mut Resolver<'s>,
         mut register_taken_function: impl FnMut(Function<'s>, FunctionId, &SignatureValue<'s>),
@@ -1178,6 +1213,12 @@ impl<'s> EvaluationState<'s> {
                             });
                         };
 
+                        source_value.taken_signature_ids.remove(foreign.as_str());
+
+                        for value in source_value.taken_function_signatures.values_mut() {
+                            value.substitute_taken_signature(foreign_id, &signature);
+                        }
+
                         for conjuration in source_value.given_signatures.values_mut() {
                             _ = conjuration.dependencies.signatures.remove(&foreign_id);
                             conjuration
@@ -1257,6 +1298,13 @@ impl<'s> EvaluationState<'s> {
                             );
                         }
 
+                        source_value.taken_function_ids.remove(foreign.as_str());
+                        source_value.taken_function_signatures.remove(&foreign_id);
+
+                        for value in source_value.taken_function_signatures.values_mut() {
+                            value.substitute_taken_function(foreign_id, &function_value);
+                        }
+
                         for conjuration in source_value.given_functions.values_mut() {
                             _ = conjuration.dependencies.functions.remove(&foreign_id);
                             conjuration
@@ -1291,6 +1339,16 @@ impl<'s> EvaluationState<'s> {
         };
 
         resolver.functions.insert(lhs_id, lhs);
+
+        if trace {
+            print!("{:?} := ", lhs.symbol);
+            lambda
+                .format(resolver, &mut IndentingFormatter::new(&mut stdout()))
+                .unwrap();
+            println!();
+            println!();
+        }
+
         self.function_ids.insert(lhs.as_str(), lhs_id);
         self.function_lambdas.insert(lhs_id, lambda);
 
@@ -1302,19 +1360,27 @@ impl<'s> EvaluationState<'s> {
         context: SignatureContext<'s>,
         resolver: &mut Resolver<'s>,
     ) -> CheckResult<'s, KnownSignatureValue<'s>> {
+        let trace = context.trace;
+
         let mut context_value = KnownSignatureValue::default();
 
-        for statement in context.0 {
+        for statement in context.statements {
             match statement {
                 SignatureStatement::SignatureAssignment(assignment) => {
-                    self.process_signature_assignment(assignment, resolver, |signature, id| {
-                        context_value
-                            .taken_signature_ids
-                            .insert(signature.as_str(), id);
-                    })?;
+                    self.process_signature_assignment(
+                        trace,
+                        assignment,
+                        resolver,
+                        |signature, id| {
+                            context_value
+                                .taken_signature_ids
+                                .insert(signature.as_str(), id);
+                        },
+                    )?;
                 }
                 SignatureStatement::FunctionAssignment(assignment) => {
                     self.process_function_assignment(
+                        trace,
                         assignment,
                         resolver,
                         |function, id, signature| {
@@ -1443,19 +1509,27 @@ impl<'s> EvaluationState<'s> {
         context: FunctionContext<'s>,
         resolver: &mut Resolver<'s>,
     ) -> CheckResult<'s, KnownFunctionValue<'s>> {
+        let trace = context.trace;
+
         let mut context_value = KnownFunctionValue::default();
 
-        for statement in context.0 {
+        for statement in context.statements {
             match statement {
                 FunctionStatement::SignatureAssignment(assignment) => {
-                    self.process_signature_assignment(assignment, resolver, |signature, id| {
-                        context_value
-                            .taken_signature_ids
-                            .insert(signature.as_str(), id);
-                    })?;
+                    self.process_signature_assignment(
+                        trace,
+                        assignment,
+                        resolver,
+                        |signature, id| {
+                            context_value
+                                .taken_signature_ids
+                                .insert(signature.as_str(), id);
+                        },
+                    )?;
                 }
                 FunctionStatement::FunctionAssignment(assignment) => {
                     self.process_function_assignment(
+                        trace,
                         assignment,
                         resolver,
                         |function, id, signature| {

@@ -1,8 +1,15 @@
-give (foo)
-give foo
-give (foo) as '(bar)'
-give bar as 'bar'
-(x) = define
-  (foo) = conjure
-  give (foo) as '(bar)'
-  (bar) = give x as 'y' to (foo)
+(false) = take
+
+(not) = define
+  (p) = take
+  p = take (p)
+  conjure (false) false using p
+
+not_apply = define
+  (P) = take
+  (not_P) = give (P) as (p) to (not)
+  not_P = take (not_P)
+  P = take (P)
+  not_P_but_P = give P as p to not_P
+  false = take from not_P_but_P
+  give false
