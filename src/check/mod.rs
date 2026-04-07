@@ -258,7 +258,7 @@ impl<'s> EvaluationState<'s> {
                                                              }) => {
                 let signature_id = self.resolve_signature(signature)?;
                 let SignatureLambda {
-                    signature,
+                    signature: signature_value,
                     dependencies: signature_dependencies,
                 } = self.signature_lambda(signature_id);
 
@@ -283,10 +283,15 @@ impl<'s> EvaluationState<'s> {
                             });
                         };
 
+                        source_value.taken_signatures.remove(&foreign_id);
                         source_value.resolver.remove_taken_signature(foreign_id);
 
-                        for value in source_value.taken_functions.values_mut() {
-                            value.substitute_taken_signature(foreign_id, &signature);
+                        for signature in source_value.taken_functions.values_mut() {
+                            signature.substitute_taken_signature(
+                                foreign_id,
+                                &signature_value,
+                                resolver,
+                            );
                         }
 
                         for conjuration in source_value.conjured_signatures.values_mut() {
@@ -297,9 +302,11 @@ impl<'s> EvaluationState<'s> {
 
                         for conjuration in source_value.conjured_functions.values_mut() {
                             _ = conjuration.dependencies.signatures.remove(&foreign_id);
-                            conjuration
-                                .signature
-                                .substitute_taken_signature(foreign_id, &signature);
+                            conjuration.signature.substitute_taken_signature(
+                                foreign_id,
+                                &signature_value,
+                                resolver,
+                            );
                         }
 
                         let mut dependencies = signature_dependencies;
@@ -369,8 +376,12 @@ impl<'s> EvaluationState<'s> {
                         source_value.resolver.remove_taken_function(foreign_id);
                         source_value.taken_functions.remove(&foreign_id);
 
-                        for value in source_value.taken_functions.values_mut() {
-                            value.substitute_taken_function(foreign_id, &function_value);
+                        for signature in source_value.taken_functions.values_mut() {
+                            signature.substitute_taken_function(
+                                foreign_id,
+                                &function_value,
+                                resolver,
+                            );
                         }
 
                         for conjuration in source_value.conjured_signatures.values_mut() {
@@ -381,9 +392,11 @@ impl<'s> EvaluationState<'s> {
 
                         for conjuration in source_value.conjured_functions.values_mut() {
                             _ = conjuration.dependencies.functions.remove(&foreign_id);
-                            conjuration
-                                .signature
-                                .substitute_taken_function(foreign_id, &function_value);
+                            conjuration.signature.substitute_taken_function(
+                                foreign_id,
+                                &function_value,
+                                resolver,
+                            );
                         }
 
                         let mut dependencies = function_dependencies;
@@ -578,7 +591,7 @@ impl<'s> EvaluationState<'s> {
                                                            }) => {
                 let signature_id = self.resolve_signature(signature)?;
                 let SignatureLambda {
-                    signature,
+                    signature: signature_value,
                     dependencies: signature_dependencies,
                 } = self.signature_lambda(signature_id);
 
@@ -603,24 +616,33 @@ impl<'s> EvaluationState<'s> {
                             });
                         };
 
+                        source_value.taken_signatures.remove(&foreign_id);
                         source_value.resolver.remove_taken_signature(foreign_id);
 
-                        for value in source_value.taken_functions.values_mut() {
-                            value.substitute_taken_signature(foreign_id, &signature);
+                        for signature in source_value.taken_functions.values_mut() {
+                            signature.substitute_taken_signature(
+                                foreign_id,
+                                &signature_value,
+                                resolver,
+                            );
                         }
 
-                        for conjuration in source_value.given_signatures.values_mut() {
-                            _ = conjuration.dependencies.signatures.remove(&foreign_id);
-                            conjuration
-                                .signature
-                                .substitute_taken_signature(foreign_id, &signature);
+                        for lambda in source_value.given_signatures.values_mut() {
+                            _ = lambda.dependencies.signatures.remove(&foreign_id);
+                            lambda.signature.substitute_taken_signature(
+                                foreign_id,
+                                &signature_value,
+                                resolver,
+                            );
                         }
 
-                        for conjuration in source_value.given_functions.values_mut() {
-                            _ = conjuration.dependencies.signatures.remove(&foreign_id);
-                            conjuration
-                                .function
-                                .substitute_taken_signature(foreign_id, &signature);
+                        for lambda in source_value.given_functions.values_mut() {
+                            _ = lambda.dependencies.signatures.remove(&foreign_id);
+                            lambda.function.substitute_taken_signature(
+                                foreign_id,
+                                &signature_value,
+                                resolver,
+                            );
                         }
 
                         let mut dependencies = signature_dependencies;
@@ -687,25 +709,51 @@ impl<'s> EvaluationState<'s> {
                             );
                         }
 
+                        println!("\n\n===== give function to function =====\n");
+                        function.symbol.dump("function");
+                        source_value
+                            .resolver
+                            .taken_function(foreign_id)
+                            .symbol
+                            .dump("foreign");
+                        source.symbol.dump("source");
+
+                        let mut stdout = stdout();
+                        let mut formatter = IndentingFormatter::new(&mut stdout);
+                        write!(formatter, "source_value: ").unwrap();
+                        source_value.format(resolver, &mut formatter).unwrap();
+                        formatter.new_line().unwrap();
+                        write!(formatter, "function_value: ").unwrap();
+                        function_value.format(resolver, &mut formatter).unwrap();
+                        formatter.new_line().unwrap();
+
                         source_value.resolver.remove_taken_function(foreign_id);
                         source_value.taken_functions.remove(&foreign_id);
 
-                        for value in source_value.taken_functions.values_mut() {
-                            value.substitute_taken_function(foreign_id, &function_value);
+                        for signature in source_value.taken_functions.values_mut() {
+                            signature.substitute_taken_function(
+                                foreign_id,
+                                &function_value,
+                                resolver,
+                            );
                         }
 
-                        for conjuration in source_value.given_functions.values_mut() {
-                            _ = conjuration.dependencies.functions.remove(&foreign_id);
-                            conjuration
-                                .function
-                                .substitute_taken_function(foreign_id, &function_value);
+                        for lambda in source_value.given_signatures.values_mut() {
+                            _ = lambda.dependencies.functions.remove(&foreign_id);
+                            lambda.signature.substitute_taken_function(
+                                foreign_id,
+                                &function_value,
+                                resolver,
+                            );
                         }
 
-                        for conjuration in source_value.given_functions.values_mut() {
-                            _ = conjuration.dependencies.functions.remove(&foreign_id);
-                            conjuration
-                                .function
-                                .substitute_taken_function(foreign_id, &function_value);
+                        for lambda in source_value.given_functions.values_mut() {
+                            _ = lambda.dependencies.functions.remove(&foreign_id);
+                            lambda.function.substitute_taken_function(
+                                foreign_id,
+                                &function_value,
+                                resolver,
+                            );
                         }
 
                         let mut dependencies = function_dependencies;

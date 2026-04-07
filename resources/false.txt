@@ -90,6 +90,12 @@ contraposition_reverse = define
     not_P = take q from contra
     give not_P
 
+  not_Q_not_P_renamed = define
+    p = take (not_Q)
+    not_Q_not_P = give p as not_Q to not_Q_not_P
+    q = take not_P from not_Q_not_P
+    give q
+
   not_not_P = define
     not_P = take (not_P)
     not_P = give P as p to not_P
@@ -105,12 +111,12 @@ contraposition_reverse = define
   contraposition = give (not_Q) as (p) to contraposition
   contraposition = give (not_P) as (q) to contraposition
 
+  contraposition = give not_Q_not_P_renamed as p_q to contraposition
   contraposition = give not_not_P_renamed as not_q to contraposition
-  contraposition = give not_Q_not_P as p_q to contraposition
 
-  not_not_Q = take q from contraposition
+  not_not_Q = take not_p from contraposition
 
-  not_not = give (Q) as (q) to not_not
+  not_not = give (Q) as (p) to not_not
   not_not = give not_not_Q as not_not_p to not_not
   Q = take p from not_not
 
